@@ -5,163 +5,126 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Folding propeller blade generator</title>
 <!--
-  Parametric folding-propeller blade generator.
-  Single file, no build step. Drop it in a GitHub Pages repo as index.html and it runs.
+  Parametric folding-propeller blade generator with a blade-element/momentum solver.
+  Single file, no build step. Drop it in a GitHub Pages repo as index.html.
 
-  NOTE: it uses ES modules, so opening the file directly with file:// will be blocked by
-  the browser. Serve it over http (GitHub Pages does this for you, or locally run
-  `python3 -m http.server` and open http://localhost:8000).
+  It uses ES modules, so file:// will be blocked. Serve over http — GitHub Pages does
+  this for you, or run `python3 -m http.server` locally.
 
-  Units: millimetres and degrees throughout. Exported STL/OBJ/PLY are Z-up in mm.
-  GLB is converted to Y-up metres-as-mm per glTF convention.
+  Units: millimetres and degrees for geometry, SI for aerodynamics.
+  STL/OBJ/PLY export Z-up in mm. GLB is converted to Y-up per the glTF convention.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#14171a;
-    --ink-2:#5b6570;
-    --ink-3:#8b959f;
-    --panel:#e9ebed;
-    --panel-2:#f4f5f6;
-    --line:#cfd4d8;
-    --line-2:#dde1e4;
-    --stage:#191d21;
-    --accent:#1f5fd0;
-    --accent-ink:#ffffff;
-    --warn:#a8600a;
-    --warn-bg:#fdf1dc;
+    --ink:#14171a; --ink-2:#5b6570; --ink-3:#8b959f;
+    --panel:#e9ebed; --panel-2:#f4f5f6; --line:#cfd4d8; --line-2:#dde1e4;
+    --stage:#191d21; --accent:#1f5fd0; --warn:#a8600a; --warn-bg:#fdf1dc;
     --sans:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --rail:340px;
+    --rail:352px;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{
-    margin:0; font-family:var(--sans); color:var(--ink); background:var(--stage);
-    -webkit-font-smoothing:antialiased; overflow:hidden;
-  }
+  body{margin:0; font-family:var(--sans); color:var(--ink); background:var(--stage);
+       -webkit-font-smoothing:antialiased; overflow:hidden}
   #app{display:grid; grid-template-columns:var(--rail) 1fr; height:100dvh}
 
-  /* ---------- control rail ---------- */
-  #rail{
-    background:var(--panel); border-right:1px solid var(--line);
-    display:flex; flex-direction:column; min-height:0;
-  }
-  #railhead{padding:18px 18px 14px; border-bottom:1px solid var(--line)}
-  #railhead h1{
-    margin:0; font-size:15px; font-weight:600; letter-spacing:-0.01em; line-height:1.25;
-  }
-  #railhead p{margin:6px 0 0; font-size:12px; line-height:1.45; color:var(--ink-2); max-width:34ch}
-  #presets{display:flex; gap:6px; flex-wrap:wrap; margin-top:12px}
-  #presets button{
-    font:500 11px/1 var(--mono); padding:6px 8px; border:1px solid var(--line);
-    background:var(--panel-2); color:var(--ink-2); border-radius:3px; cursor:pointer;
-  }
+  #rail{background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  #railhead{padding:16px 18px 13px; border-bottom:1px solid var(--line)}
+  #railhead h1{margin:0; font-size:15px; font-weight:600; letter-spacing:-0.01em; line-height:1.25}
+  #railhead p{margin:6px 0 0; font-size:12px; line-height:1.45; color:var(--ink-2); max-width:36ch}
+  #presets{display:flex; gap:6px; flex-wrap:wrap; margin-top:11px}
+  #presets button{font:500 11px/1 var(--mono); padding:6px 8px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--ink-2); border-radius:3px; cursor:pointer}
   #presets button:hover{border-color:var(--accent); color:var(--accent)}
 
   #groups{overflow-y:auto; flex:1; min-height:0; padding-bottom:8px}
   details{border-bottom:1px solid var(--line-2)}
-  details summary{
-    list-style:none; cursor:pointer; padding:11px 18px; font-size:12.5px; font-weight:600;
-    display:flex; align-items:center; gap:8px; user-select:none;
-  }
+  details summary{list-style:none; cursor:pointer; padding:11px 18px; font-size:12.5px; font-weight:600;
+    display:flex; align-items:center; gap:8px; user-select:none}
   details summary::-webkit-details-marker{display:none}
-  details summary::before{
-    content:""; width:6px; height:6px; border-right:1.5px solid var(--ink-3);
-    border-bottom:1.5px solid var(--ink-3); transform:rotate(-45deg); transition:transform .15s;
-    margin-bottom:2px;
-  }
+  details summary::before{content:""; width:6px; height:6px; border-right:1.5px solid var(--ink-3);
+    border-bottom:1.5px solid var(--ink-3); transform:rotate(-45deg); transition:transform .15s; margin-bottom:2px}
   details[open] summary::before{transform:rotate(45deg); margin-bottom:0}
   details summary:hover{background:var(--panel-2)}
+  details.solver{background:#e3e7ec; border-left:3px solid var(--accent)}
+  details.solver summary{padding-left:15px}
   .grp{padding:2px 18px 14px}
+  details.solver .grp{padding-left:15px}
 
   .row{margin:0 0 11px}
   .row .top{display:flex; justify-content:space-between; align-items:baseline; gap:8px}
   .row label{font-size:12px; color:var(--ink-2); line-height:1.3}
   .row .val{display:flex; align-items:baseline; gap:4px}
-  .row input[type=number]{
-    width:64px; font:400 12px/1 var(--mono); text-align:right; padding:3px 5px;
-    border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:3px;
-  }
-  .row .unit{font:400 10.5px/1 var(--mono); color:var(--ink-3); width:30px}
-  .row input[type=range]{
-    width:100%; margin:6px 0 0; height:14px; -webkit-appearance:none; background:transparent; display:block;
-  }
+  .row input[type=number]{width:66px; font:400 12px/1 var(--mono); text-align:right; padding:3px 5px;
+    border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:3px}
+  .row .unit{font:400 10.5px/1 var(--mono); color:var(--ink-3); width:34px}
+  .row input[type=range]{width:100%; margin:6px 0 0; height:14px; -webkit-appearance:none; background:transparent; display:block}
   input[type=range]::-webkit-slider-runnable-track{height:2px; background:var(--line); border-radius:2px}
   input[type=range]::-moz-range-track{height:2px; background:var(--line); border-radius:2px}
-  input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:#fff;
-    border:1.5px solid var(--ink-2); margin-top:-5.5px; cursor:pointer;
-  }
-  input[type=range]::-moz-range-thumb{
-    width:13px; height:13px; border-radius:50%; background:#fff; border:1.5px solid var(--ink-2); cursor:pointer;
-  }
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:#fff; border:1.5px solid var(--ink-2); margin-top:-5.5px; cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:13px; height:13px; border-radius:50%; background:#fff;
+    border:1.5px solid var(--ink-2); cursor:pointer}
   input[type=range]:focus-visible::-webkit-slider-thumb{border-color:var(--accent); box-shadow:0 0 0 3px rgba(31,95,208,.25)}
-  .hint{font-size:11px; line-height:1.4; color:var(--ink-3); margin:-4px 0 12px}
-  select{
-    width:100%; font:400 12px/1 var(--sans); padding:5px 6px; border:1px solid var(--line);
-    background:#fff; color:var(--ink); border-radius:3px;
-  }
-  .check{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-2); margin:0 0 8px}
+  .hint{font-size:11px; line-height:1.45; color:var(--ink-3); margin:-2px 0 12px}
+  select{width:100%; font:400 12px/1 var(--sans); padding:5px 6px; border:1px solid var(--line);
+    background:#fff; color:var(--ink); border-radius:3px}
+  .check{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-2); margin:0 0 10px}
   .check input{accent-color:var(--accent); width:14px; height:14px}
-  .mini{
-    font:500 10.5px/1 var(--mono); padding:4px 6px; border:1px solid var(--line);
-    background:var(--panel-2); color:var(--ink-2); border-radius:3px; cursor:pointer;
-  }
+  .mini{font:500 10.5px/1 var(--mono); padding:5px 7px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--ink-2); border-radius:3px; cursor:pointer}
   .mini:hover{border-color:var(--accent); color:var(--accent)}
+  .go{width:100%; font:600 13px/1 var(--sans); padding:10px; border:none; border-radius:3px;
+    background:var(--accent); color:#fff; cursor:pointer; margin-top:2px}
+  .go:hover{background:#1a52b6}
+  .go:disabled{background:var(--ink-3); cursor:default}
+  #solveout{font:400 11px/1.6 var(--mono); color:var(--ink-2); margin:10px 0 0; min-height:1.6em}
+  #solveout b{color:var(--ink); font-weight:500}
+  #spanchart{margin:10px 0 2px}
+  #spanchart svg{display:block; width:100%; height:auto}
+  .legend{font:400 10px/1.5 var(--mono); color:var(--ink-3); display:flex; gap:12px; margin-top:3px; flex-wrap:wrap}
+  .legend i{display:inline-block; width:9px; height:2px; vertical-align:middle; margin-right:4px}
 
   #railfoot{border-top:1px solid var(--line); padding:12px 18px 14px; background:var(--panel-2)}
   #railfoot .lbl{font-size:11px; color:var(--ink-3); margin:0 0 7px}
   #exports{display:grid; grid-template-columns:1fr 1fr; gap:6px}
-  #exports button{
-    font:500 12px/1 var(--sans); padding:8px 6px; border:1px solid var(--line); background:#fff;
-    color:var(--ink); border-radius:3px; cursor:pointer; text-align:left;
-  }
+  #exports button{font:500 12px/1 var(--sans); padding:8px 6px; border:1px solid var(--line); background:#fff;
+    color:var(--ink); border-radius:3px; cursor:pointer; text-align:left}
   #exports button:hover{border-color:var(--accent); color:var(--accent)}
   #exports button b{font:500 12px/1 var(--mono)}
   #exports button span{display:block; font-size:10px; color:var(--ink-3); margin-top:3px}
   #utilrow{display:flex; gap:6px; margin-top:8px}
   #utilrow button{flex:1}
 
-  /* ---------- stage ---------- */
   #stage{position:relative; min-width:0; background:var(--stage)}
   #stage canvas{display:block; width:100%; height:100%}
-  #readout{
-    position:absolute; left:16px; bottom:16px; background:rgba(20,23,26,.82);
-    backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.1); border-radius:4px;
-    padding:10px 12px; color:#dfe3e7; font:400 11px/1.7 var(--mono); pointer-events:none;
-    max-width:min(46ch, calc(100% - 32px));
-  }
+  #readout{position:absolute; left:16px; bottom:16px; background:rgba(20,23,26,.84); backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.1); border-radius:4px; padding:10px 12px; color:#dfe3e7;
+    font:400 11px/1.65 var(--mono); pointer-events:none; max-width:min(48ch, calc(100% - 32px))}
   #readout table{border-collapse:collapse}
   #readout td{padding:0 10px 0 0; white-space:nowrap}
   #readout td:last-child{padding-right:0; color:#fff}
   #readout .k{color:#8b959f}
+  #readout .sep td{padding-top:7px}
   #viewtools{position:absolute; right:16px; top:16px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
-  #viewtools button{
-    font:500 11px/1 var(--mono); padding:7px 9px; border:1px solid rgba(255,255,255,.14);
-    background:rgba(20,23,26,.82); color:#c8ced4; border-radius:3px; cursor:pointer;
-  }
+  #viewtools button{font:500 11px/1 var(--mono); padding:7px 9px; border:1px solid rgba(255,255,255,.14);
+    background:rgba(20,23,26,.82); color:#c8ced4; border-radius:3px; cursor:pointer}
   #viewtools button:hover{color:#fff; border-color:rgba(255,255,255,.35)}
   #viewtools button[aria-pressed=true]{color:#fff; border-color:#5b8ce8; background:rgba(31,95,208,.35)}
-  #warn{
-    position:absolute; left:16px; top:16px; max-width:44ch; background:var(--warn-bg);
-    border:1px solid #e6c58a; color:var(--warn); border-radius:4px; padding:9px 11px;
-    font-size:11.5px; line-height:1.5; display:none;
-  }
+  #warn{position:absolute; left:16px; top:16px; max-width:46ch; background:var(--warn-bg); border:1px solid #e6c58a;
+    color:var(--warn); border-radius:4px; padding:9px 11px; font-size:11.5px; line-height:1.5; display:none}
   #warn.on{display:block}
-  #boot{
-    position:absolute; inset:0; display:grid; place-content:center; text-align:center;
-    color:#8b959f; font:400 12px/1.6 var(--mono); padding:24px;
-  }
+  #boot{position:absolute; inset:0; display:grid; place-content:center; text-align:center; color:#8b959f;
+    font:400 12px/1.6 var(--mono); padding:24px}
   #boot b{display:block; color:#dfe3e7; font-weight:500; margin-bottom:6px}
-
   :focus-visible{outline:2px solid var(--accent); outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-
   @media (max-width:820px){
-    #app{grid-template-columns:1fr; grid-template-rows:52vh 1fr}
+    #app{grid-template-columns:1fr; grid-template-rows:50vh 1fr}
     #rail{border-right:none; border-top:1px solid var(--line); order:2}
     #stage{order:1}
     #readout{font-size:10px; left:10px; bottom:10px; padding:8px 10px}
@@ -174,7 +137,7 @@
   <aside id="rail">
     <div id="railhead">
       <h1>Folding propeller blade generator</h1>
-      <p>One blade of a two-blade folding unit, built from a pitch law, a fixed angle at one station, and a pivot boss at the root.</p>
+      <p>Give it the numbers you have. The solver works out the chord and twist from your thrust, power and rpm.</p>
       <div id="presets"></div>
     </div>
     <div id="groups"></div>
@@ -183,7 +146,7 @@
       <div id="exports">
         <button data-fmt="stlb"><b>STL</b><span>binary, for slicers</span></button>
         <button data-fmt="stla"><b>STL</b><span>ascii</span></button>
-        <button data-fmt="obj"><b>OBJ</b><span>with normals</span></button>
+        <button data-fmt="obj"><b>OBJ</b><span>grouped, with normals</span></button>
         <button data-fmt="ply"><b>PLY</b><span>ascii</span></button>
         <button data-fmt="glb"><b>GLB</b><span>glTF 2.0, Y-up</span></button>
         <button data-fmt="json"><b>JSON</b><span>parameters</span></button>
@@ -226,50 +189,65 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    ========================================================================== */
 
 const PARAMS = [
-  // key, label, default, min, max, step, unit, group
-  {k:'diameter',      l:'Total diameter (both blades)', v:254, min:60,  max:900, s:1,   u:'mm', g:'Size'},
-  {k:'pivotR',        l:'Pivot centre radius',          v:14,  min:3,   max:150, s:0.5, u:'mm', g:'Size'},
-  {k:'rootStation',   l:'Aerofoil starts at radius',    v:23,  min:5,   max:250, s:0.5, u:'mm', g:'Size'},
+  {k:'diameter',      l:'Total diameter (both blades)', v:254, min:60,  max:5000, s:1,   u:'mm', g:'Specification'},
+  {k:'pivotR',        l:'Pivot centre radius',          v:14,  min:3,   max:900, s:0.5, u:'mm', g:'Specification'},
+  {k:'pitch',         l:'Geometric pitch',              v:127, min:10,  max:3000, s:1,   u:'mm', g:'Specification'},
+  {k:'constraintPct', l:'Constrained station',          v:75,  min:10,  max:99,  s:1,   u:'% R', g:'Specification'},
+  {k:'constraintAngle',l:'Blade angle there',           v:14,  min:0,   max:70,  s:0.1, u:'deg', g:'Specification'},
 
-  {k:'holeDia',       l:'Hub hole inner diameter',      v:4,   min:1,   max:40,  s:0.1, u:'mm', g:'Root & hub'},
-  {k:'bossOD',        l:'Boss outer diameter',          v:11,  min:3,   max:90,  s:0.5, u:'mm', g:'Root & hub'},
-  {k:'bossT',         l:'Root tab thickness',           v:4,   min:0.6, max:25,  s:0.1, u:'mm', g:'Root & hub'},
-  {k:'tabWidth',      l:'Tab width where blade starts', v:11,  min:2,   max:90,  s:0.5, u:'mm', g:'Root & hub'},
-  {k:'rootOverlap',   l:'Tab reaches past blade root',  v:5,   min:0,   max:40,  s:0.5, u:'mm', g:'Root & hub'},
+  {k:'blades',        l:'Blades on the hub',            v:2,   min:2,   max:8,   s:1,   u:'',    g:'Design point'},
+  {k:'rpm',           l:'Shaft speed',                  v:8000,min:60, max:60000,s:50, u:'rpm', g:'Design point'},
+  {k:'targetThrust',  l:'Thrust wanted, whole prop',    v:900, min:10,  max:500000,s:10, u:'gf',  g:'Design point'},
+  {k:'shaftPower',    l:'Shaft power available',        v:150, min:5,   max:300000,s:5,  u:'W',   g:'Design point'},
+  {k:'airspeed',      l:'Axial airspeed',               v:0,   min:0,   max:150, s:0.5, u:'m/s', g:'Design point'},
+  {k:'altitude',      l:'Altitude',                     v:0,   min:-400,max:9000,s:50,  u:'m',   g:'Design point'},
+  {k:'maxTipMach',    l:'Tip Mach limit',               v:0.72,min:0.25,max:0.95,s:0.01,u:'',    g:'Design point'},
+  {k:'maxChordPctR',  l:'Chord ceiling',                v:18,  min:4,   max:40,  s:0.5, u:'% R', g:'Design point'},
 
-  {k:'chordRoot',     l:'Chord at blade root',          v:12,  min:2,   max:120, s:0.5, u:'mm', g:'Planform'},
-  {k:'chordMax',      l:'Chord at widest point',        v:22,  min:2,   max:160, s:0.5, u:'mm', g:'Planform'},
-  {k:'chordTip',      l:'Chord at tip',                 v:11,  min:1,   max:120, s:0.5, u:'mm', g:'Planform'},
+  {k:'holeDia',       l:'Insert bore (bolt size)',      v:4,   min:1,   max:150,  s:0.1, u:'mm', g:'Root & hub'},
+  {k:'insertOD',      l:'Insert outer diameter',        v:6,   min:1.5, max:200,  s:0.1, u:'mm', g:'Root & hub'},
+  {k:'insertLen',     l:'Insert length',                v:4,   min:0.5, max:150,  s:0.1, u:'mm', g:'Root & hub'},
+  {k:'bossOD',        l:'Boss outer diameter',          v:11,  min:3,   max:500,  s:0.5, u:'mm', g:'Root & hub'},
+  {k:'bossT',         l:'Root thickness',               v:4,   min:0.6, max:150,  s:0.1, u:'mm', g:'Root & hub'},
+  {k:'filletR',       l:'Edge fillet',                  v:0.7, min:0,   max:50,   s:0.05,u:'mm', g:'Root & hub'},
+  {k:'tabWidth',      l:'Root width where blade starts',v:12,  min:2,   max:500,  s:0.5, u:'mm', g:'Root & hub'},
+  {k:'rootStation',   l:'Blade loft starts at radius',  v:20,  min:5,   max:1600, s:0.5, u:'mm', g:'Root & hub'},
+  {k:'hubReach',      l:'Hub reaches out to radius',    v:26,  min:6,   max:1800, s:0.5, u:'mm', g:'Root & hub'},
+  {k:'rootBlend',     l:'Blend hub into aerofoil over', v:16,  min:1,   max:60,  s:0.5, u:'% R', g:'Root & hub'},
+
+  {k:'chordRoot',     l:'Chord where the aerofoil starts', v:14, min:2, max:700, s:0.5, u:'mm', g:'Planform'},
+  {k:'chordMax',      l:'Chord at widest point',        v:22,  min:2,   max:900, s:0.5, u:'mm', g:'Planform'},
+  {k:'chordTip',      l:'Chord at tip',                 v:11,  min:1,   max:700, s:0.5, u:'mm', g:'Planform'},
   {k:'maxChordPct',   l:'Widest point at radius',       v:55,  min:5,   max:98,  s:1,   u:'% R', g:'Planform'},
-  {k:'sweep',         l:'Tip sweep (back positive)',    v:8,   min:-80, max:80,  s:0.5, u:'mm', g:'Planform'},
-  {k:'rake',          l:'Tip rake (axial lift)',        v:0,   min:-60, max:60,  s:0.5, u:'mm', g:'Planform'},
+  {k:'sweep',         l:'Tip sweep (back positive)',    v:8,   min:-400, max:400,  s:0.5, u:'mm', g:'Planform'},
+  {k:'rake',          l:'Tip rake (axial lift)',        v:0,   min:-300, max:300,  s:0.5, u:'mm', g:'Planform'},
   {k:'tipRoundPct',   l:'Rounded tip over last',        v:9,   min:0,   max:40,  s:0.5, u:'% span', g:'Planform'},
 
-  {k:'thickRoot',     l:'Thickness at root',            v:13,  min:2,   max:40,  s:0.5, u:'% c', g:'Aerofoil'},
+  {k:'thickRoot',     l:'Thickness where aerofoil starts', v:14, min:2, max:40,  s:0.5, u:'% c', g:'Aerofoil'},
   {k:'thickTip',      l:'Thickness at tip',             v:8,   min:1,   max:30,  s:0.5, u:'% c', g:'Aerofoil'},
   {k:'camber',        l:'Max camber',                   v:3.5, min:0,   max:9,   s:0.1, u:'% c', g:'Aerofoil'},
   {k:'camberPos',     l:'Camber position',              v:40,  min:15,  max:70,  s:1,   u:'% c', g:'Aerofoil'},
+  {k:'teThick',       l:'Trailing edge thickness',      v:0.4, min:0.05,max:20,   s:0.05,u:'mm', g:'Aerofoil'},
   {k:'pitchAxis',     l:'Pitch axis at chord',          v:30,  min:0,   max:100, s:1,   u:'% c', g:'Aerofoil'},
 
-  {k:'pitch',         l:'Geometric pitch',              v:127, min:10,  max:600, s:1,   u:'mm', g:'Pitch & twist'},
-  {k:'constraintPct', l:'Constrained station',          v:75,  min:10,  max:99,  s:1,   u:'% R', g:'Pitch & twist'},
-  {k:'constraintAngle',l:'Blade angle there',           v:14,  min:0,   max:70,  s:0.1, u:'deg', g:'Pitch & twist'},
-  {k:'blendWidth',    l:'Local blend width',            v:25,  min:2,   max:100, s:1,   u:'% R', g:'Pitch & twist'},
-  {k:'rootTwist',     l:'Tab plane angle',              v:0,   min:-30, max:30,  s:0.5, u:'deg', g:'Pitch & twist'},
-  {k:'rootBlendPct',  l:'Blend into tab over',          v:22,  min:1,   max:60,  s:1,   u:'% span', g:'Pitch & twist'},
+  {k:'blendWidth',    l:'Local blend width',            v:25,  min:2,   max:100, s:1,   u:'% R', g:'Twist'},
+  {k:'rootTwist',     l:'Hub plane angle',              v:0,   min:-30, max:30,  s:0.5, u:'deg', g:'Twist'},
 
-  {k:'spanSections',  l:'Sections along span',          v:90,  min:8,   max:400, s:1,   u:'', g:'Mesh'},
-  {k:'sectionPoints', l:'Points per section',           v:80,  min:16,  max:300, s:2,   u:'', g:'Mesh'},
-  {k:'tabSegments',   l:'Segments around boss',         v:96,  min:16,  max:360, s:4,   u:'', g:'Mesh'},
+  {k:'spanSections',  l:'Sections along span',          v:110, min:12,  max:400, s:1,   u:'', g:'Mesh'},
+  {k:'sectionPoints', l:'Points per section',           v:88,  min:16,  max:300, s:2,   u:'', g:'Mesh'},
+  {k:'tabSegments',   l:'Segments around the boss',     v:112, min:16,  max:360, s:4,   u:'', g:'Mesh'},
+  {k:'filletSegments',l:'Steps across the fillet',      v:5,   min:1,   max:16,  s:1,   u:'', g:'Mesh'},
 ];
 
 const DEFAULTS = {};
 PARAMS.forEach(p => DEFAULTS[p.k] = p.v);
 DEFAULTS.twistMode = 'offset';
 DEFAULTS.hand = 'ccw';
+DEFAULTS.solveMode = 'thrust';
+DEFAULTS.solveTwist = true;
+DEFAULTS.exportInsert = false;
 
 const state = Object.assign({}, DEFAULTS);
-
 const view = { wireframe:false, pair:true, disc:true };
 
 const TWIST_MODES = [
@@ -280,15 +258,23 @@ const TWIST_MODES = [
 ];
 
 const PRESETS = [
-  {n:'10×5',   p:{diameter:254, pitch:127, chordRoot:12, chordMax:22, chordTip:11, pivotR:14, rootStation:23, bossOD:11, holeDia:4,  bossT:4,   tabWidth:11}},
-  {n:'13×4.4', p:{diameter:330, pitch:112, chordRoot:14, chordMax:27, chordTip:13, pivotR:17, rootStation:28, bossOD:13, holeDia:5,  bossT:4.6, tabWidth:13}},
-  {n:'15×5',   p:{diameter:381, pitch:127, chordRoot:16, chordMax:32, chordTip:15, pivotR:19, rootStation:32, bossOD:15, holeDia:5,  bossT:5.2, tabWidth:15}},
-  {n:'22×6.6', p:{diameter:559, pitch:168, chordRoot:22, chordMax:46, chordTip:20, pivotR:26, rootStation:44, bossOD:22, holeDia:8,  bossT:7,   tabWidth:22}},
-  {n:'5×3',    p:{diameter:127, pitch:76,  chordRoot:7,  chordMax:12, chordTip:6,  pivotR:8,  rootStation:13, bossOD:7,  holeDia:2.5,bossT:2.4, tabWidth:7}},
+  {n:'10×5',   p:{diameter:254, pitch:127, chordRoot:14, chordMax:22, chordTip:11, pivotR:14, rootStation:20, hubReach:26,
+                  bossOD:11, holeDia:4, insertOD:6, insertLen:4, bossT:4, tabWidth:12, rpm:8000, targetThrust:900, shaftPower:150}},
+  {n:'13×4.4', p:{diameter:330, pitch:112, chordRoot:17, chordMax:28, chordTip:13, pivotR:17, rootStation:25, hubReach:32,
+                  bossOD:13, holeDia:5, insertOD:7, insertLen:4.6, bossT:4.6, tabWidth:15, rpm:6000, targetThrust:1500, shaftPower:250}},
+  {n:'15×5',   p:{diameter:381, pitch:127, chordRoot:19, chordMax:32, chordTip:15, pivotR:19, rootStation:28, hubReach:36,
+                  bossOD:15, holeDia:5, insertOD:8, insertLen:5.2, bossT:5.2, tabWidth:17, rpm:5000, targetThrust:2200, shaftPower:340}},
+  {n:'22×6.6', p:{diameter:559, pitch:168, chordRoot:26, chordMax:46, chordTip:20, pivotR:26, rootStation:40, hubReach:52,
+                  bossOD:22, holeDia:8, insertOD:11, insertLen:7, bossT:7, tabWidth:24, rpm:3300, targetThrust:5000, shaftPower:750}},
+  {n:'5×3',    p:{diameter:127, pitch:76, chordRoot:8, chordMax:12, chordTip:6, pivotR:8, rootStation:12, hubReach:15,
+                  bossOD:7, holeDia:2.5, insertOD:3.6, insertLen:2.4, bossT:2.4, tabWidth:8, rpm:16000, targetThrust:300, shaftPower:55}},
+  {n:'104×32', p:{diameter:2642, pitch:813, chordRoot:110, chordMax:180, chordTip:85, pivotR:110, rootStation:165,
+                  hubReach:215, bossOD:95, holeDia:32, insertOD:45, insertLen:32, bossT:32, tabWidth:105,
+                  filletR:5, teThick:2, constraintAngle:9, rpm:1200, targetThrust:120000, shaftPower:17000}},
 ];
 
 /* ============================================================================
-   2. MATHS HELPERS
+   2. MATHS
    ========================================================================== */
 
 const TAU = Math.PI * 2;
@@ -298,307 +284,638 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
-/** Derived, validated geometry constants for the current parameter set. */
+/** Validated geometry constants for the current parameters. */
 function derive() {
   const w = [];
-  const R  = state.diameter / 2;
+  const R = state.diameter / 2;
   const rp = clamp(state.pivotR, 1, R * 0.6);
 
-  const bossR = Math.max(state.bossOD / 2, state.holeDia / 2 + 0.4);
-  if (state.holeDia / 2 + 0.4 > state.bossOD / 2)
-    w.push('Boss outer diameter is too small for that hole; it has been opened up to leave a 0.4 mm wall.');
+  const insOD = Math.max(state.insertOD, state.holeDia + 0.6);
+  if (state.insertOD < state.holeDia + 0.6)
+    w.push('The insert wall was thin, so its outer diameter was opened to ' + insOD.toFixed(1) + ' mm.');
+  const boreR = insOD / 2;
 
-  let r0 = state.rootStation;
-  const r0min = rp + bossR * 0.55;
-  if (r0 < r0min) { r0 = r0min; w.push('Aerofoil root pulled out to ' + r0.toFixed(1) + ' mm so it clears the boss.'); }
-  if (r0 > R * 0.85) { r0 = R * 0.85; w.push('Aerofoil root pushed in to ' + r0.toFixed(1) + ' mm to leave some blade.'); }
+  const bossR = Math.max(state.bossOD / 2, boreR + 0.8);
+  if (state.bossOD / 2 < boreR + 0.8)
+    w.push('Boss opened to ⌀' + (bossR * 2).toFixed(1) + ' mm to keep 0.8 mm of material around the insert.');
 
-  // Tab must reach past the boss for the tangent construction to exist.
-  let xTip = r0 + state.rootOverlap;
-  if (xTip < rp + bossR * 1.15) xTip = rp + bossR * 1.15;
-
+  const h = Math.max(0.3, state.bossT / 2);
   const halfW = Math.max(state.tabWidth / 2, 0.8);
-  if (state.tabWidth > state.chordRoot * 1.02)
-    w.push('The tab is wider than the blade root chord, so its corners will stick out of the aerofoil.');
+  const f = clamp(state.filletR, 0, Math.min(h * 0.9, (bossR - boreR) * 0.7, halfW * 0.8));
+  if (state.filletR > f + 1e-6)
+    w.push('Fillet reduced to ' + f.toFixed(2) + ' mm — it cannot exceed half the root thickness or the boss wall.');
 
-  // The root section is centred on the pitch axis, not on Y = 0, so the outer end of
-  // the tab is shifted to sit on the blade root chord and stay buried inside it.
-  const tabY = (0.5 - state.pitchAxis / 100) * state.chordRoot * Math.cos(rad(state.rootTwist));
+  let r0 = clamp(state.rootStation, rp + bossR * 0.35, R * 0.8);
+  let xEnd = state.hubReach;
+  if (xEnd < rp + bossR * 1.2) xEnd = rp + bossR * 1.2;
+  if (xEnd < r0 + 2) xEnd = r0 + 2;
+  if (xEnd > R * 0.85) xEnd = R * 0.85;
+  if (r0 > xEnd - 2) r0 = xEnd - 2;
 
-  const K = Math.max(8, Math.round(state.sectionPoints / 2));   // half-count of section points
-  const NS = Math.max(6, Math.round(state.spanSections));
+  const K = Math.max(8, Math.round(state.sectionPoints / 2));
+  const NS = Math.max(10, Math.round(state.spanSections));
   const NT = Math.max(16, Math.round(state.tabSegments / 4) * 4);
+  const NF = Math.max(1, Math.round(state.filletSegments));
 
-  return { R, rp, r0, bossR, xTip, halfW, tabY, K, NS, NT, warnings: w,
-           hand: state.hand === 'cw' ? -1 : 1,
-           bossT: Math.max(0.4, state.bossT) };
+  const tabY = (0.5 - state.pitchAxis / 100) * state.chordRoot * Math.cos(rad(state.rootTwist));
+  const blendLen = Math.max(1, state.rootBlend / 100 * R);
+
+  return { R, rp, r0, xEnd, bossR, boreR, insOD, h, halfW, f, tabY, blendLen,
+           K, NS, NT, NF, warnings: w, hand: state.hand === 'cw' ? -1 : 1 };
 }
 
-/** Chord length at normalised span u (0 = aerofoil root, 1 = tip). */
+/** Chord at normalised span u (0 where the aerofoil starts, 1 at the tip). */
 function chordAt(u, D) {
   const rMax = clamp(state.maxChordPct / 100 * D.R, D.r0 + 1e-3, D.R - 1e-3);
   const xm = clamp((rMax - D.r0) / (D.R - D.r0), 0.03, 0.97);
   let c = (u <= xm)
     ? lerp(state.chordRoot, state.chordMax, smooth(u / xm))
     : lerp(state.chordMax, state.chordTip, smooth((u - xm) / (1 - xm)));
-
-  // Elliptical rounding over the outboard tip fraction.
   const e = state.tipRoundPct / 100;
   if (e > 1e-4 && u > 1 - e) {
-    const s = (u - (1 - e)) / e;                 // 0 → 1 across the rounded region
+    const s = (u - (1 - e)) / e;
     c *= Math.max(0.12, Math.sqrt(Math.max(0, 1 - s * s)));
   }
   return Math.max(0.3, c);
 }
 
-/** Helical blade angle from the geometric pitch, measured from the disc plane. */
-const pitchAngle = (r) => Math.atan2(state.pitch, TAU * Math.max(r, 1e-6));
+const pitchAngle = r => Math.atan2(state.pitch, TAU * Math.max(r, 1e-6));
 
-/** Blade angle at radius r after the station constraint is applied. */
-function twistAt(r, D) {
+/** Blade angle from the pitch law with the station constraint applied. */
+function twistLaw(r, D) {
   const rc = clamp(state.constraintPct / 100 * D.R, D.r0, D.R);
   const target = rad(state.constraintAngle);
-  const mode = state.twistMode;
-
-  if (mode === 'repitch') {
+  if (state.twistMode === 'repitch') {
     const p2 = TAU * rc * Math.tan(clamp(target, rad(0.05), rad(85)));
     return Math.atan2(p2, TAU * Math.max(r, 1e-6));
   }
   let b = pitchAngle(r);
-  if (mode === 'offset') {
-    b += target - pitchAngle(rc);
-  } else if (mode === 'local') {
-    const w = Math.max(0.5, state.blendWidth / 100 * D.R);
-    b += (target - pitchAngle(rc)) * Math.exp(-Math.pow((r - rc) / w, 2));
+  if (state.twistMode === 'offset') b += target - pitchAngle(rc);
+  else if (state.twistMode === 'local') {
+    const wd = Math.max(0.5, state.blendWidth / 100 * D.R);
+    b += (target - pitchAngle(rc)) * Math.exp(-Math.pow((r - rc) / wd, 2));
   }
   return b;
 }
 
-/** Blade angle including the blend down to the flat root tab. */
-function twistBlended(u, r, D) {
-  const b = twistAt(r, D);
-  const f = state.rootBlendPct / 100;
-  if (u >= f) return b;
-  return lerp(rad(state.rootTwist), b, smooth(u / f));
-}
+/** How far the section has turned from hub slab into aerofoil at radius r. */
+const blendAt = (r, D) => smooth((r - D.xEnd) / D.blendLen);
+
+/** Blade angle including the roll into the hub plane. */
+const twistAt = (r, D) => lerp(rad(state.rootTwist), twistLaw(r, D), blendAt(r, D));
 
 /**
- * NACA 4-digit section as a closed loop of 2K points.
- * Index 0 is the trailing edge; the loop runs TE → lower → LE → upper → TE.
- * Returns [[x, y], …] with x along the chord from 0 (LE) to 1 (TE).
+ * NACA 4-digit section, closed loop of 2K+1 points. Index 0 is the lower
+ * trailing edge; the loop runs TE -> lower -> LE -> upper -> TE, closing across
+ * the blunt trailing edge. teFrac opens that edge to a printable thickness
+ * instead of the knife edge the standard thickness law would give.
  */
-function section(K, thick, camb, cpos) {
+function naca(K, thick, camb, cpos, teFrac) {
   const t = thick, m = camb, p = clamp(cpos, 0.05, 0.95);
   const yt = x => 5 * t * (0.2969 * Math.sqrt(Math.max(x, 0)) - 0.1260 * x
-                - 0.3516 * x * x + 0.2843 * x * x * x - 0.1036 * x * x * x * x);
-  const cam = x => {
-    if (m <= 1e-6) return [0, 0];
-    return (x < p)
-      ? [m / (p * p) * (2 * p * x - x * x),               2 * m / (p * p) * (p - x)]
-      : [m / ((1 - p) ** 2) * ((1 - 2 * p) + 2 * p * x - x * x), 2 * m / ((1 - p) ** 2) * (p - x)];
-  };
+                - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4) + 0.5 * teFrac * x;
+  const cam = x => m <= 1e-6 ? [0, 0]
+    : (x < p ? [m / (p * p) * (2 * p * x - x * x), 2 * m / (p * p) * (p - x)]
+             : [m / ((1 - p) ** 2) * ((1 - 2 * p) + 2 * p * x - x * x), 2 * m / ((1 - p) ** 2) * (p - x)]);
   const surf = (x, sgn) => {
-    const [yc, dy] = cam(x);
-    const th = Math.atan(dy), T = yt(x);
+    const [yc, dy] = cam(x), th = Math.atan(dy), T = yt(x);
     return [x - sgn * T * Math.sin(th), yc + sgn * T * Math.cos(th)];
   };
   const xs = k => (1 - Math.cos(Math.PI * k / K)) / 2;
-
   const pts = [];
-  for (let k = K; k >= 1; k--) pts.push(surf(xs(k), -1));   // TE → LE, lower
-  pts.push([0, 0]);                                          // leading edge
-  for (let k = 1; k <= K - 1; k++) pts.push(surf(xs(k), +1)); // LE → TE, upper
-  return pts;                                                // length 2K
+  for (let k = K; k >= 1; k--) pts.push(surf(xs(k), -1));
+  pts.push([0, 0]);
+  for (let k = 1; k <= K; k++) pts.push(surf(xs(k), +1));
+  return pts;
 }
 
 /* ============================================================================
-   3. MESH BUILDERS
-   Each builder returns { pos:[…], idx:[…] } in millimetres, Z = thrust axis,
-   X = spanwise (radius from the motor axis), Y = direction of rotation.
+   3. HUB OUTLINE
+   The hub is the convex hull of the boss circle and the two corners where the
+   blade starts, cut off at x = xEnd. Because the hull is convex, offsetting it
+   inward by the fillet radius is just a smaller circle plus shifted tangents —
+   which is what lets the fillet and the blade root share one description.
    ========================================================================== */
 
-/** Flip winding if the closed shell came out inside-out. Returns |volume| in mm³. */
-function orientShell(pos, idx, from = 0) {
-  let v = 0;
-  for (let i = from; i < idx.length; i += 3) {
-    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
-    const ax = pos[a], ay = pos[a + 1], az = pos[a + 2];
-    const bx = pos[b], by = pos[b + 1], bz = pos[b + 2];
-    const cx = pos[c], cy = pos[c + 1], cz = pos[c + 2];
-    v += (ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)) / 6;
+function hubOutline(D) {
+  const C = [D.rp, 0], Rb = D.bossR, xEnd = D.xEnd;
+  const upper = [xEnd, D.tabY + D.halfW];
+  const lower = [xEnd, D.tabY - D.halfW];
+
+  const tang = (P, sign) => {
+    const dx = P[0] - C[0], dy = P[1] - C[1];
+    const L = Math.max(Math.hypot(dx, dy), Rb * 1.0001);
+    const g = Math.atan2(dy, dx), al = Math.acos(clamp(Rb / L, -1, 1));
+    const ang = g + sign * al;
+    const T = [C[0] + Rb * Math.cos(ang), C[1] + Rb * Math.sin(ang)];
+    let n = [T[1] - P[1], -(T[0] - P[0])];
+    const l = Math.hypot(n[0], n[1]) || 1; n = [n[0] / l, n[1] / l];
+    if (n[0] * (C[0] - P[0]) + n[1] * (C[1] - P[1]) > 0) n = [-n[0], -n[1]];
+    return { T, ang, n, d: n[0] * P[0] + n[1] * P[1] };
+  };
+  const TU = tang(upper, +1), TL = tang(lower, -1);
+
+  let a0 = TU.ang, a1 = TL.ang;
+  while (a1 <= a0) a1 += TAU;
+  const inArc = th => { let t = th; while (t < a0) t += TAU; while (t >= a0 + TAU) t -= TAU; return t <= a1; };
+
+  /** Distance from the boss centre to the outline offset inward by delta. */
+  const ray = (cx, cy, delta) => {
+    let s = Infinity;
+    if (inArc(Math.atan2(cy, cx))) s = Math.max(0.05, Rb - delta);
+    for (const L of [TU, TL]) {
+      const den = L.n[0] * cx + L.n[1] * cy;
+      if (den > 1e-9) {
+        const v = ((L.d - delta) - (L.n[0] * C[0] + L.n[1] * C[1])) / den;
+        if (v > 0) s = Math.min(s, v);
+      }
+    }
+    if (cx > 1e-9) { const v = (xEnd - C[0]) / cx; if (v > 0) s = Math.min(s, v); }
+    return clamp(s, 0.05, Rb * 40);
+  };
+
+  /** [low, high] y of the offset outline at station x. */
+  const spanAt = (x, delta) => {
+    const circ = sgn => C[1] + sgn * Math.sqrt(Math.max(1e-4, (Rb - delta) ** 2 - (x - C[0]) ** 2));
+    const hi = (x <= TU.T[0]) ? circ(+1) : ((TU.d - delta) - TU.n[0] * x) / TU.n[1];
+    const lo = (x <= TL.T[0]) ? circ(-1) : ((TL.d - delta) - TL.n[0] * x) / TL.n[1];
+    const a = Math.min(lo, hi), b = Math.max(lo, hi);
+    return [a, Math.max(b, a + 1e-3)];
+  };
+
+  return { C, Rb, xEnd, ray, spanAt };
+}
+
+/** Fillet profile: inward offset and height, top face round to bottom face. */
+function edgeProfile(h, f, NF) {
+  const p = [];
+  if (f < 1e-4) { p.push([0, h], [0, -h]); return p; }
+  for (let k = 0; k <= NF; k++) { const a = Math.PI / 2 * (1 - k / NF); p.push([f * (1 - Math.cos(a)), (h - f) + f * Math.sin(a)]); }
+  p.push([0, -(h - f)]);
+  for (let k = 1; k <= NF; k++) { const a = Math.PI / 2 * (k / NF); p.push([f * (1 - Math.cos(a)), -((h - f) + f * Math.sin(a))]); }
+  return p;
+}
+
+/**
+ * The hub's cross-section at station x, as a closed polyline in the section
+ * plane. It starts on the trailing-edge side at mid height and runs toward -z,
+ * the same way the aerofoil loop runs, so the two can be blended point for point.
+ * Sampled far more finely than the mesh needs: the blade resamples this by
+ * arclength at positions that shift slightly from station to station, and a
+ * coarse polyline would let those shifts snag on its vertices and ripple the
+ * surface along the span.
+ */
+function hubSection(H, x, h, f) {
+  const pts = [];
+  const push = (n, fn) => { for (let i = 0; i <= n; i++) pts.push(fn(i / n)); };
+  const hi = d => H.spanAt(x, d)[1], lo = d => H.spanAt(x, d)[0];
+  const hw = Math.max(0, h - f);
+  const NF = 16;
+
+  push(12, t => [hi(0), -hw * t]);
+  push(NF, t => { const a = Math.PI / 2 * t; return [hi(f * (1 - Math.cos(a))), -(hw + f * Math.sin(a))]; });
+  push(64, t => [lerp(hi(f), lo(f), t), -h]);
+  push(NF, t => { const a = Math.PI / 2 * (1 - t); return [lo(f * (1 - Math.cos(a))), -(hw + f * Math.sin(a))]; });
+  push(24, t => [lo(0), lerp(-hw, hw, t)]);
+  push(NF, t => { const a = Math.PI / 2 * t; return [lo(f * (1 - Math.cos(a))), hw + f * Math.sin(a)]; });
+  push(64, t => [lerp(lo(f), hi(f), t), h]);
+  push(NF, t => { const a = Math.PI / 2 * (1 - t); return [hi(f * (1 - Math.cos(a))), hw + f * Math.sin(a)]; });
+  push(12, t => [hi(0), hw * (1 - t)]);
+  return pts;
+}
+
+/** Cumulative normalised arclength around a closed loop of [y,z] points. */
+function arcParam(loop) {
+  const n = loop.length, cum = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) {
+    const a = loop[i], b = loop[(i + 1) % n];
+    cum[i + 1] = cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1]);
   }
-  if (v < 0) for (let i = from; i < idx.length; i += 3) {
+  const L = cum[n] || 1;
+  for (let i = 0; i <= n; i++) cum[i] /= L;
+  return cum;
+}
+
+/** Resample a closed polyline at the given normalised arclength positions. */
+function resample(loop, cum, ts) {
+  const out = [], n = loop.length;
+  let j = 0;
+  for (const t0 of ts) {
+    const t = t0 - Math.floor(t0);
+    while (j > 0 && cum[j] > t) j--;
+    while (j < n - 1 && cum[j + 1] < t) j++;
+    const span = cum[j + 1] - cum[j] || 1;
+    const w = clamp((t - cum[j]) / span, 0, 1);
+    const a = loop[j], b = loop[(j + 1) % n];
+    out.push([lerp(a[0], b[0], w), lerp(a[1], b[1], w)]);
+  }
+  return out;
+}
+
+/* ============================================================================
+   4. MESH BUILDERS
+   X is spanwise (radius from the shaft axis), Z is the thrust axis,
+   Y is the direction of rotation. Millimetres throughout.
+   ========================================================================== */
+
+function orientShell(pos, idx) {
+  let v = 0;
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+    v += (pos[a] * (pos[b + 1] * pos[c + 2] - pos[b + 2] * pos[c + 1])
+        - pos[a + 1] * (pos[b] * pos[c + 2] - pos[b + 2] * pos[c])
+        + pos[a + 2] * (pos[b] * pos[c + 1] - pos[b + 1] * pos[c])) / 6;
+  }
+  if (v < 0) for (let i = 0; i < idx.length; i += 3) {
     const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t;
   }
   return Math.abs(v);
 }
 
-/** Lofted aerofoil blade, capped at both ends. */
-function buildBlade(D) {
+/**
+ * The blade. Its inboard sections are the hub's own cross-section, so the loft
+ * grows out of the hub instead of stabbing into it, then morphs into the
+ * aerofoil across the blend length. The scale walks from just inside the hub to
+ * just outside it over the overlap, so the two shells cross cleanly.
+ */
+function buildBlade(D, H) {
   const pos = [], idx = [];
-  const M = 2 * D.K, NS = D.NS;
+  const M = 2 * D.K + 1, NS = D.NS;
   const a = state.pitchAxis / 100;
-  const rootThick = D.bossT * 1.05;     // slightly proud of the tab so faces never coincide
-  const blendF = state.rootBlendPct / 100;
-
+  const frozen = hubSection(H, D.xEnd, D.h, D.f);
+  const frozenCum = arcParam(frozen);
   const stations = [];
+
   for (let i = 0; i < NS; i++) {
-    const u = i / (NS - 1);
+    const t = i / (NS - 1);
+    const u = (1 - Math.cos(Math.PI * t)) / 2;            // cluster sections at root and tip
     const r = lerp(D.r0, D.R, u);
+    const s = blendAt(r, D);
     const c = chordAt(u, D);
-    const beta = twistBlended(u, r, D);
+    const beta = twistAt(r, D);
+    const tr = lerp(state.thickRoot, state.thickTip, u) / 100;
 
-    // Aerofoil thickness ratio, blended at the root so the section matches the tab slab.
-    let tr = lerp(state.thickRoot, state.thickTip, u) / 100;
-    let cm = state.camber / 100;
-    if (u < blendF) {
-      const s = smooth(u / blendF);
-      tr = lerp(clamp(rootThick / c, 0.02, 0.9), tr, s);
-      cm = lerp(0, cm, s);
-    }
-
-    const prof = section(D.K, tr, cm, state.camberPos / 100);
+    const prof = naca(D.K, tr, state.camber / 100, state.camberPos / 100,
+                      clamp(state.teThick / c, 0.004, 0.25));
     const cb = Math.cos(beta), sb = Math.sin(beta);
-    const yOff = state.sweep * u * u * D.hand;
-    const zOff = state.rake * u * u;
+    const yOff = state.sweep * u * u * D.hand, zOff = state.rake * u * u;
+    const aero = prof.map(([xc, yc]) => {
+      const dx = (xc - a) * c, dy = yc * c;
+      return [(dx * cb - dy * sb) * D.hand + yOff, dx * sb + dy * cb + zOff];
+    });
+
+    let sec;
+    if (s >= 1 - 1e-6) {
+      sec = aero;
+    } else {
+      const ts = arcParam(prof);
+      const tArr = []; for (let j = 0; j < M; j++) tArr.push(ts[j]);
+      let loop, cum;
+      if (r < D.xEnd) { loop = hubSection(H, r, D.h, D.f); cum = arcParam(loop); }
+      else { loop = frozen; cum = frozenCum; }
+      const hub = resample(loop, cum, tArr);
+      const k = r < D.xEnd ? lerp(0.985, 1.015, (r - D.r0) / Math.max(D.xEnd - D.r0, 1e-6)) : 1.015;
+      let hy = 0, hz = 0;
+      for (const p of hub) { hy += p[0]; hz += p[1]; }
+      hy /= hub.length; hz /= hub.length;
+      sec = hub.map((p, j) => {
+        const y = (hy + (p[0] - hy) * k) * D.hand, z = hz + (p[1] - hz) * k;
+        return [lerp(y, aero[j][0], s), lerp(z, aero[j][1], s)];
+      });
+    }
 
     let cx = 0, cy = 0, cz = 0;
     for (let j = 0; j < M; j++) {
-      const dx = (prof[j][0] - a) * c;      // along the chord
-      const dy = prof[j][1] * c;            // normal to the chord
-      const x = r;
-      const y = (dx * cb - dy * sb) * D.hand + yOff;
-      const z = (dx * sb + dy * cb) + zOff;
-      pos.push(x, y, z);
-      cx += x; cy += y; cz += z;
+      pos.push(r, sec[j][0], sec[j][1]);
+      cx += r; cy += sec[j][0]; cz += sec[j][1];
     }
     stations.push([cx / M, cy / M, cz / M]);
   }
 
   const id = (i, j) => i * M + j;
-  for (let i = 0; i < NS - 1; i++) {
-    for (let j = 0; j < M; j++) {
-      const jn = (j + 1) % M;
-      idx.push(id(i, j), id(i, jn), id(i + 1, jn));
-      idx.push(id(i, j), id(i + 1, jn), id(i + 1, j));
-    }
+  for (let i = 0; i < NS - 1; i++) for (let j = 0; j < M; j++) {
+    const jn = (j + 1) % M;
+    idx.push(id(i, j), id(i, jn), id(i + 1, jn));
+    idx.push(id(i, j), id(i + 1, jn), id(i + 1, j));
   }
-
-  // Caps. Winding is chosen to match the free edges left by the side walls.
   const rootC = pos.length / 3;
   pos.push(stations[0][0], stations[0][1], stations[0][2]);
   for (let j = 0; j < M; j++) idx.push(rootC, id(0, (j + 1) % M), id(0, j));
-
   const tipC = pos.length / 3;
-  const st = stations[NS - 1];
-  pos.push(st[0], st[1], st[2]);
+  const last = stations[NS - 1];
+  pos.push(last[0], last[1], last[2]);
   for (let j = 0; j < M; j++) idx.push(tipC, id(NS - 1, j), id(NS - 1, (j + 1) % M));
 
-  const vol = orientShell(pos, idx);
-  return { pos, idx, vol };
+  return { pos, idx, vol: orientShell(pos, idx) };
 }
 
-/**
- * Root tab: convex hull of the boss circle and the two blade-root corners,
- * extruded through the tab thickness, with the pivot hole bored through it.
- */
-function buildTab(D) {
-  const pos = [], idx = [];
-  const N = D.NT, h = D.bossT / 2, C = [D.rp, 0], Rb = D.bossR;
-  const hand = D.hand;
+/** The hub: filleted plate bored for the insert. */
+function buildHub(D, H) {
+  const pos = [], idx = [], N = D.NT;
+  const prof = edgeProfile(D.h, D.f, D.NF);
+  const rings = [];
 
-  // --- outline polygon: P+ → tangent → arc round the back → tangent → P- ---
-  const Pp = [D.xTip, D.tabY + D.halfW], Pm = [D.xTip, D.tabY - D.halfW];
-  const tangent = (P, sign) => {
-    const dx = P[0] - C[0], dy = P[1] - C[1];
-    const L = Math.max(Math.hypot(dx, dy), Rb * 1.001);
-    const g = Math.atan2(dy, dx), al = Math.acos(clamp(Rb / L, -1, 1));
-    const ang = g + sign * al;
-    return { pt: [C[0] + Rb * Math.cos(ang), C[1] + Rb * Math.sin(ang)], ang };
-  };
-  const Tp = tangent(Pp, +1), Tm = tangent(Pm, -1);
-
-  const outline = [Pp.slice(), Tp.pt.slice()];
-  let a0 = Tp.ang, a1 = Tm.ang;
-  while (a1 <= a0) a1 += TAU;
-  const arcN = Math.max(8, Math.round(N * (a1 - a0) / TAU));
-  for (let i = 1; i < arcN; i++) {
-    const t = a0 + (a1 - a0) * i / arcN;
-    outline.push([C[0] + Rb * Math.cos(t), C[1] + Rb * Math.sin(t)]);
-  }
-  outline.push(Tm.pt.slice(), Pm.slice());
-
-  // --- resample the outline on rays from the hole centre so it pairs 1:1 with the bore ---
-  const hitRay = (dirx, diry) => {
-    let best = 0;
-    for (let i = 0; i < outline.length; i++) {
-      const A = outline[i], B = outline[(i + 1) % outline.length];
-      const ex = B[0] - A[0], ey = B[1] - A[1];
-      const den = dirx * ey - diry * ex;
-      if (Math.abs(den) < 1e-12) continue;
-      const qx = A[0] - C[0], qy = A[1] - C[1];
-      const s = (qx * ey - qy * ex) / den;          // distance along the ray
-      const u = (qx * diry - qy * dirx) / den;      // position along the edge
-      if (s > 0 && u >= -1e-9 && u <= 1 + 1e-9) best = Math.max(best, s);
+  for (const [delta, z] of prof) {
+    const ring = [];
+    for (let k = 0; k < N; k++) {
+      const th = TAU * k / N, cx = Math.cos(th), sy = Math.sin(th);
+      const s = H.ray(cx, sy, delta);
+      ring.push(pos.length / 3);
+      pos.push(H.C[0] + cx * s, (H.C[1] + sy * s) * D.hand, z);
     }
-    return best || Rb;
-  };
-
-  const hr = Math.min(state.holeDia / 2, Rb - 0.3);
-  const oT = [], oB = [], iT = [], iB = [];
+    rings.push(ring);
+  }
+  const boreTop = [], boreBot = [];
   for (let k = 0; k < N; k++) {
-    const th = TAU * k / N, cx = Math.cos(th), sy = Math.sin(th);
-    const s = hitRay(cx, sy);
-    const ox = C[0] + cx * s, oy = C[1] + sy * s;
-    const ix = C[0] + cx * hr, iy = C[1] + sy * hr;
-    oT.push(pos.length / 3); pos.push(ox, oy * hand,  h);
-    oB.push(pos.length / 3); pos.push(ox, oy * hand, -h);
-    iT.push(pos.length / 3); pos.push(ix, iy * hand,  h);
-    iB.push(pos.length / 3); pos.push(ix, iy * hand, -h);
+    const th = TAU * k / N, cx = Math.cos(th) * D.boreR, sy = Math.sin(th) * D.boreR;
+    boreTop.push(pos.length / 3); pos.push(H.C[0] + cx, (H.C[1] + sy) * D.hand,  D.h);
+    boreBot.push(pos.length / 3); pos.push(H.C[0] + cx, (H.C[1] + sy) * D.hand, -D.h);
   }
 
+  for (let p = 0; p < rings.length - 1; p++) {
+    const A = rings[p], B = rings[p + 1];
+    for (let k = 0; k < N; k++) {
+      const n = (k + 1) % N;
+      idx.push(A[k], B[n], A[n]); idx.push(A[k], B[k], B[n]);
+    }
+  }
+  const top = rings[0], bot = rings[rings.length - 1];
   for (let k = 0; k < N; k++) {
     const n = (k + 1) % N;
-    // top face (+Z)
-    idx.push(oT[k], oT[n], iT[n]);   idx.push(oT[k], iT[n], iT[k]);
-    // bottom face (−Z)
-    idx.push(oB[n], oB[k], iB[k]);   idx.push(oB[n], iB[k], iB[n]);
-    // outer wall
-    idx.push(oB[k], oB[n], oT[n]);   idx.push(oB[k], oT[n], oT[k]);
-    // bore wall
-    idx.push(iB[n], iB[k], iT[k]);   idx.push(iB[n], iT[k], iT[n]);
+    idx.push(top[k], top[n], boreTop[n]); idx.push(top[k], boreTop[n], boreTop[k]);
+    idx.push(bot[n], bot[k], boreBot[k]); idx.push(bot[n], boreBot[k], boreBot[n]);
+    idx.push(boreTop[k], boreTop[n], boreBot[n]); idx.push(boreTop[k], boreBot[n], boreBot[k]);
   }
-
-  const vol = orientShell(pos, idx);
-  return { pos, idx, vol };
+  return { pos, idx, vol: orientShell(pos, idx) };
 }
 
-/** Both shells merged into one indexed mesh. */
+/** The pressed-in metal sleeve. */
+function buildInsert(D, H) {
+  const pos = [], idx = [], N = D.NT;
+  const ro = D.insOD / 2, ri = Math.max(state.holeDia / 2, 0.2);
+  const hz = Math.max(0.25, state.insertLen / 2);
+  const oT = [], oB = [], iT = [], iB = [];
+  for (let k = 0; k < N; k++) {
+    const th = TAU * k / N, c = Math.cos(th), s = Math.sin(th);
+    oT.push(pos.length / 3); pos.push(H.C[0] + c * ro, s * ro * D.hand,  hz);
+    oB.push(pos.length / 3); pos.push(H.C[0] + c * ro, s * ro * D.hand, -hz);
+    iT.push(pos.length / 3); pos.push(H.C[0] + c * ri, s * ri * D.hand,  hz);
+    iB.push(pos.length / 3); pos.push(H.C[0] + c * ri, s * ri * D.hand, -hz);
+  }
+  for (let k = 0; k < N; k++) {
+    const n = (k + 1) % N;
+    idx.push(oT[k], oT[n], iT[n]); idx.push(oT[k], iT[n], iT[k]);
+    idx.push(oB[n], oB[k], iB[k]); idx.push(oB[n], iB[k], iB[n]);
+    idx.push(oB[k], oB[n], oT[n]); idx.push(oB[k], oT[n], oT[k]);
+    idx.push(iB[n], iB[k], iT[k]); idx.push(iB[n], iT[k], iT[n]);
+  }
+  return { pos, idx, vol: orientShell(pos, idx) };
+}
+
+function merge(shells) {
+  let np = 0, ni = 0;
+  shells.forEach(s => { np += s.pos.length; ni += s.idx.length; });
+  const pos = new Float32Array(np), idx = new Uint32Array(ni);
+  let po = 0, io = 0, vo = 0;
+  const ranges = [];
+  shells.forEach(s => {
+    pos.set(s.pos, po);
+    for (let i = 0; i < s.idx.length; i++) idx[io + i] = s.idx[i] + vo;
+    ranges.push({ iStart: io, iCount: s.idx.length });
+    po += s.pos.length; io += s.idx.length; vo += s.pos.length / 3;
+  });
+  return { pos, idx, ranges };
+}
+
 function buildAll() {
   const D = derive();
-  const blade = buildBlade(D);
-  const tab = buildTab(D);
-  const pos = new Float32Array(blade.pos.length + tab.pos.length);
-  pos.set(blade.pos, 0);
-  pos.set(tab.pos, blade.pos.length);
-  const off = blade.pos.length / 3;
-  const idx = new Uint32Array(blade.idx.length + tab.idx.length);
-  idx.set(blade.idx, 0);
-  for (let i = 0; i < tab.idx.length; i++) idx[blade.idx.length + i] = tab.idx[i] + off;
-  return { pos, idx, D, volume: blade.vol + tab.vol };
+  const H = hubOutline(D);
+  const blade = buildBlade(D, H);
+  const hub = buildHub(D, H);
+  const insert = buildInsert(D, H);
+  return { D, H, blade, hub, insertShell: insert,
+           body: merge([blade, hub]), all: merge([blade, hub, insert]),
+           insert: merge([insert]), volume: blade.vol + hub.vol };
 }
 
 /* ============================================================================
-   4. EXPORTERS
+   5. AERODYNAMICS
+   Blade-element momentum theory with Prandtl tip loss and an analytic section
+   polar. A first-order engineering model: good for sizing, not a stand-in for
+   wind-tunnel or CFD numbers.
+   ========================================================================== */
+
+const G = 9.80665;
+
+function atmosphere(altM) {
+  const T = 288.15 - 0.0065 * altM;
+  const p = 101325 * Math.pow(T / 288.15, 5.25588);
+  const rho = p / (287.053 * T);
+  return { rho, a: 20.0468 * Math.sqrt(T), nu: 1.789e-5 / rho };
+}
+
+/** Lift and drag of the section at angle of attack alpha (radians). */
+function polar(alpha, tc, Re, M, cl0) {
+  const pg = Math.sqrt(Math.max(0.08, 1 - Math.min(0.92, M) ** 2));
+  const slope = 5.9 / pg;
+  const clmax = clamp(1.10 + 0.45 * Math.log10(Math.max(Re, 8e3) / 1e5), 0.70, 1.60);
+  const aPos = (clmax - cl0) / slope, aNeg = (-clmax - cl0) / slope;
+  let cl = cl0 + slope * alpha, sep = 0;
+  if (alpha > aPos) { sep = clamp((alpha - aPos) / rad(14), 0, 1); cl = clmax * (1 - 0.42 * sep) + 0.9 * sep * Math.sin(2 * alpha); }
+  else if (alpha < aNeg) { sep = clamp((aNeg - alpha) / rad(14), 0, 1); cl = -clmax * (1 - 0.42 * sep) + 0.9 * sep * Math.sin(2 * alpha); }
+  const cf = 0.074 / Math.pow(Math.max(Re, 5e3), 0.2);
+  let cd = 2.1 * cf * (1 + 2.4 * tc + 60 * tc ** 4) * (1 + 3.2e4 / Math.max(Re, 5e3)) + 0.011 * cl * cl;
+  cd += sep * 1.15 * Math.sin(Math.min(Math.abs(alpha), Math.PI / 2)) ** 2;
+  if (M > 0.72) cd += 22 * Math.pow(M - 0.72, 3);
+  return { cl, cd, sep };
+}
+
+function designPoint() {
+  const air = atmosphere(state.altitude);
+  return {
+    B: Math.round(state.blades), om: state.rpm * TAU / 60, rho: air.rho, aSound: air.a, nu: air.nu,
+    V: state.airspeed, T: state.targetThrust * G / 1000, P: state.shaftPower,
+  };
+}
+
+/** Run BEMT over the geometry as it stands. */
+function analyse(D, dp, N = 34) {
+  const { B, om, rho, aSound, nu, V } = dp;
+  const R = D.R, rStart = Math.max(D.xEnd + D.blendLen * 0.35, D.r0 + 1e-3);
+  if (rStart >= R * 0.97) return null;
+  const cl0 = 0.11 * state.camber;
+  const st = [];
+  let T = 0, Q = 0, stalled = 0;
+
+  for (let i = 0; i < N; i++) {
+    const r = rStart + (R - rStart) * (i + 0.5) / N;
+    const rm = r / 1000, dr = (R - rStart) / N / 1000;
+    const u = (r - D.r0) / (R - D.r0);
+    const c = chordAt(u, D) / 1000;
+    const beta = twistAt(r, D);
+    const tc = lerp(state.thickRoot, state.thickTip, u) / 100;
+
+    let wa = Math.max(0.5, 0.02 * om * rm), wt = 0, out = null;
+    for (let it = 0; it < 60; it++) {
+      const Ua = V + wa, Ut = Math.max(om * rm - wt, 0.05 * om * rm);
+      const phi = Math.atan2(Ua, Ut), W = Math.hypot(Ua, Ut);
+      const F = Math.max(0.06, (2 / Math.PI) * Math.acos(clamp(
+        Math.exp(-B / 2 * (R / 1000 - rm) / Math.max(rm * Math.sin(Math.abs(phi)), 1e-4)), 0, 1)));
+      const al = beta - phi;
+      const Re = Math.max(2e3, W * c / nu), M = W / aSound;
+      const pol = polar(al, tc, Re, M, cl0);
+      const q = 0.5 * rho * W * W * c;
+      const dT = B * q * (pol.cl * Math.cos(phi) - pol.cd * Math.sin(phi));
+      const dFt = B * q * (pol.cl * Math.sin(phi) + pol.cd * Math.cos(phi));
+      const den = 4 * Math.PI * rm * rho * F;
+      const waN = 0.5 * (-V + Math.sqrt(Math.max(0, V * V + 4 * Math.max(dT, 0) / den)));
+      const wtN = Math.max(dFt, 0) / (den * Math.max(V + waN, 1e-3));
+      const prev = wa;
+      wa = clamp(wa + 0.35 * (waN - wa), 0, 0.5 * om * rm + 3 * V + 60);
+      wt = clamp(wt + 0.35 * (wtN - wt), 0, 0.6 * om * rm);
+      out = { r, c: c * 1000, beta, phi, al, W, Re, M, F, dT, dQ: dFt * rm, cl: pol.cl, cd: pol.cd, sep: pol.sep };
+      if (it > 8 && Math.abs(wa - prev) < 1e-4) break;
+    }
+    if (!out) continue;
+    T += out.dT * dr; Q += out.dQ * dr;
+    if (out.sep > 0.15) stalled++;
+    st.push(out);
+  }
+
+  const P = Q * om;
+  const A = Math.PI * (R / 1000) ** 2;
+  const tipMach = om * (R / 1000) / aSound;
+  const FoM = P > 1 && T > 0 ? Math.pow(T, 1.5) / (Math.sqrt(2 * rho * A) * P) : 0;
+  const eta = P > 1 ? T * V / P : 0;
+  return { T, Q, P, FoM, eta, tipMach, stations: st,
+           stalledFrac: st.length ? stalled / st.length : 0, discLoad: T / A };
+}
+
+/**
+ * Design chord and twist for a target thrust: uniform disc loading corrected for
+ * tip loss, with every section run at its own best lift-to-drag ratio.
+ */
+function designFor(D, dp, T, N = 30) {
+  const { B, om, rho, aSound, nu, V } = dp;
+  const R = D.R / 1000, A = Math.PI * R * R;
+  const cl0 = 0.11 * state.camber;
+  const rStart = Math.max(D.xEnd + D.blendLen * 0.35, D.r0 + 1e-3) / 1000;
+  if (rStart >= R * 0.97) return { stations: [], capped: false };
+  const cCap = state.maxChordPctR / 100 * D.R / 1000;
+  const dr = (R - rStart) / N;
+  const rs = [];
+  for (let i = 0; i < N; i++) rs.push(rStart + (R - rStart) * (i + 0.5) / N);
+
+  // Uniform induced velocity, scaled until the tip-loss-corrected loading
+  // integrates to the thrust asked for. Loading then tapers to zero at the tip
+  // on its own, which is what keeps the chord distribution sane out there.
+  let w = Math.max(0.05, 0.5 * (-V + Math.sqrt(Math.max(0, V * V + 2 * Math.max(T, 0) / (rho * A)))));
+  const F = new Array(N).fill(1), phi = new Array(N).fill(0),
+        W = new Array(N).fill(0), load = new Array(N).fill(0);
+  for (let outer = 0; outer < 30; outer++) {
+    let Tint = 0;
+    for (let i = 0; i < N; i++) {
+      const rm = rs[i], Ua = V + w;
+      phi[i] = Math.atan2(Ua, om * rm); W[i] = Math.hypot(Ua, om * rm);
+      F[i] = Math.max(0.04, (2 / Math.PI) * Math.acos(clamp(
+        Math.exp(-B / 2 * (R - rm) / Math.max(rm * Math.sin(phi[i]), 1e-4)), 0, 1)));
+      load[i] = 4 * Math.PI * rm * rho * Ua * w * F[i];
+      Tint += load[i] * dr;
+    }
+    if (!(Tint > 0)) break;
+    const err = T / Tint;
+    if (Math.abs(err - 1) < 2e-4) break;
+    w = Math.max(0.01, w * Math.pow(err, 0.45));
+  }
+
+  const out = [];
+  let capped = false;
+  for (let i = 0; i < N; i++) {
+    const rm = rs[i], u = (rm * 1000 - D.r0) / (D.R - D.r0);
+    const tc = lerp(state.thickRoot, state.thickTip, u) / 100;
+    let c = 0.05 * R, alD = rad(4), cl = 0.6, cd = 0.02;
+    for (let it = 0; it < 14; it++) {
+      const Re = Math.max(2e3, W[i] * c / nu), M = W[i] / aSound;
+      let best = -1e9;
+      for (let a = -1; a <= 13; a += 0.25) {          // run each section at its own best L/D
+        const p = polar(rad(a), tc, Re, M, cl0);
+        if (p.cl <= 0.05 || p.sep > 0.02) continue;
+        const q = p.cl / p.cd;
+        if (q > best) { best = q; alD = rad(a); cl = p.cl; cd = p.cd; }
+      }
+      const eff = Math.max(cl * Math.cos(phi[i]) - cd * Math.sin(phi[i]), 1e-6);
+      // the ideal hover chord runs as 1/r and goes silly at the root; real
+      // blades taper it back, since a wide low-Reynolds root costs more drag
+      // than the thrust it returns
+      const taper = lerp(0.55, 1, smooth((rm / R - 0.15) / 0.30));
+      let cN = taper * load[i] / (B * 0.5 * rho * W[i] * W[i] * eff);
+      if (cN > cCap) { cN = cCap; capped = true; }
+      c = clamp(c + 0.7 * (cN - c), 1e-4, cCap);
+    }
+    out.push({ r: rm * 1000, c: c * 1000, beta: phi[i] + alD });
+  }
+  return { stations: out, capped };
+}
+
+/** The declared range of a parameter, so fitted values are clamped to what the
+    controls actually accept rather than to constants that go stale. */
+function limit(key, v) {
+  const p = PARAMS.find(x => x.k === key);
+  return p ? clamp(v, p.min, p.max) : v;
+}
+
+/** Fit the parametric chord and twist model to a designed distribution. */
+function fitDesign(D, des) {
+  const S = des.stations, cs = S.map(s => s.c);
+  if (!S.length) return null;
+  let iMax = 0; cs.forEach((c, i) => { if (c > cs[iMax]) iMax = i; });
+  // when the chord ceiling clips a run of stations the design is flat, not
+  // peaked; put the widest point at the far end of that run so the model keeps
+  // the plateau instead of decaying straight off the first station
+  for (let i = S.length - 1; i > iMax; i--) if (cs[i] >= cs[iMax] * 0.995) { iMax = i; break; }
+
+  // the designed chord runs to zero at the tip because of tip loss; read the
+  // model's tip value off 95% R and let the tip rounding do the rest
+  const at = rq => {
+    for (let i = 1; i < S.length; i++) if (S[i].r >= rq) {
+      const t = (rq - S[i - 1].r) / Math.max(S[i].r - S[i - 1].r, 1e-9);
+      return lerp(S[i - 1].c, S[i].c, clamp(t, 0, 1));
+    }
+    return S[S.length - 1].c;
+  };
+  const cRoot = limit('chordRoot', cs[0]);
+  const cTip = limit('chordTip', at(0.95 * D.R));
+
+  const rc = state.constraintPct / 100 * D.R;
+  let bc = S[0].beta;
+  for (let i = 1; i < S.length; i++) {
+    if (S[i].r >= rc) {
+      const t = (rc - S[i - 1].r) / Math.max(S[i].r - S[i - 1].r, 1e-9);
+      bc = lerp(S[i - 1].beta, S[i].beta, clamp(t, 0, 1));
+      break;
+    }
+    bc = S[i].beta;
+  }
+  let num = 0, den = 0;
+  for (const s of S) { num += s.r * TAU * s.r * Math.tan(clamp(s.beta, rad(1), rad(80))); den += s.r; }
+
+  return { chordRoot: cRoot, chordMax: limit('chordMax', cs[iMax]), chordTip: cTip,
+           maxChordPct: clamp(S[iMax].r / D.R * 100, 8, 96),
+           pitch: limit('pitch', num / Math.max(den, 1e-9)),
+           constraintAngle: limit('constraintAngle', deg(bc)) };
+}
+
+/* ============================================================================
+   6. EXPORTERS
    ========================================================================== */
 
 function faceNormals(pos, idx) {
-  const n = new Float32Array(idx.length);   // one normal per triangle, xyz
+  const n = new Float32Array(idx.length);
   for (let i = 0, t = 0; i < idx.length; i += 3, t += 3) {
     const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
     const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2];
     const vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const L = Math.hypot(nx, ny, nz) || 1;
     n[t] = nx / L; n[t + 1] = ny / L; n[t + 2] = nz / L;
   }
@@ -623,20 +940,17 @@ function vertexNormals(pos, idx) {
 
 function stlBinary(pos, idx) {
   const nTri = idx.length / 3, fn = faceNormals(pos, idx);
-  const buf = new ArrayBuffer(84 + nTri * 50);
-  const dv = new DataView(buf);
+  const buf = new ArrayBuffer(84 + nTri * 50), dv = new DataView(buf);
   const header = 'Folding propeller blade generator';
   for (let i = 0; i < header.length; i++) dv.setUint8(i, header.charCodeAt(i));
   dv.setUint32(80, nTri, true);
   let o = 84;
   for (let t = 0; t < nTri; t++) {
-    dv.setFloat32(o, fn[t * 3], true);
-    dv.setFloat32(o + 4, fn[t * 3 + 1], true);
+    dv.setFloat32(o, fn[t * 3], true); dv.setFloat32(o + 4, fn[t * 3 + 1], true);
     dv.setFloat32(o + 8, fn[t * 3 + 2], true); o += 12;
     for (let k = 0; k < 3; k++) {
       const v = idx[t * 3 + k] * 3;
-      dv.setFloat32(o, pos[v], true);
-      dv.setFloat32(o + 4, pos[v + 1], true);
+      dv.setFloat32(o, pos[v], true); dv.setFloat32(o + 4, pos[v + 1], true);
       dv.setFloat32(o + 8, pos[v + 2], true); o += 12;
     }
     dv.setUint16(o, 0, true); o += 2;
@@ -659,15 +973,18 @@ function stlAscii(pos, idx) {
   return out.join('\n');
 }
 
-function objText(pos, idx) {
+function objText(pos, idx, ranges, names) {
   const nrm = vertexNormals(pos, idx);
-  const out = ['# Folding propeller blade generator', '# units: millimetres, Z = thrust axis', 'o propeller_blade'];
+  const out = ['# Folding propeller blade generator', '# units: millimetres, Z = thrust axis'];
   for (let i = 0; i < pos.length; i += 3) out.push(`v ${pos[i].toFixed(5)} ${pos[i+1].toFixed(5)} ${pos[i+2].toFixed(5)}`);
   for (let i = 0; i < nrm.length; i += 3) out.push(`vn ${nrm[i].toFixed(5)} ${nrm[i+1].toFixed(5)} ${nrm[i+2].toFixed(5)}`);
-  for (let i = 0; i < idx.length; i += 3) {
-    const a = idx[i] + 1, b = idx[i + 1] + 1, c = idx[i + 2] + 1;
-    out.push(`f ${a}//${a} ${b}//${b} ${c}//${c}`);
-  }
+  ranges.forEach((rg, gi) => {
+    out.push(`g ${names[gi] || ('part' + gi)}`);
+    for (let i = rg.iStart; i < rg.iStart + rg.iCount; i += 3) {
+      const a = idx[i] + 1, b = idx[i + 1] + 1, c = idx[i + 2] + 1;
+      out.push(`f ${a}//${a} ${b}//${b} ${c}//${c}`);
+    }
+  });
   return out.join('\n');
 }
 
@@ -683,76 +1000,63 @@ function plyText(pos, idx) {
   return out.join('\n');
 }
 
-/** Minimal glTF 2.0 binary. Converts Z-up mm to the glTF Y-up convention. */
 function glb(pos, idx) {
-  const nv = pos.length / 3;
+  const nv = pos.length / 3, nrm = vertexNormals(pos, idx);
   const P = new Float32Array(pos.length), N = new Float32Array(pos.length);
-  const nrm = vertexNormals(pos, idx);
   const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < nv; i++) {
     const x = pos[i*3], y = pos[i*3+1], z = pos[i*3+2];
-    P[i*3] = x; P[i*3+1] = z; P[i*3+2] = -y;            // Z-up → Y-up
+    P[i*3] = x; P[i*3+1] = z; P[i*3+2] = -y;
     N[i*3] = nrm[i*3]; N[i*3+1] = nrm[i*3+2]; N[i*3+2] = -nrm[i*3+1];
     for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], P[i*3+k]); mx[k] = Math.max(mx[k], P[i*3+k]); }
   }
   const I = new Uint32Array(idx);
-  const pB = P.byteLength, nB = N.byteLength, iB = I.byteLength;
-  const binLen = pB + nB + iB;
+  const pB = P.byteLength, nB = N.byteLength, iB = I.byteLength, binLen = pB + nB + iB;
   const bin = new Uint8Array(binLen);
-  bin.set(new Uint8Array(P.buffer), 0);
-  bin.set(new Uint8Array(N.buffer), pB);
+  bin.set(new Uint8Array(P.buffer), 0); bin.set(new Uint8Array(N.buffer), pB);
   bin.set(new Uint8Array(I.buffer), pB + nB);
-
   const json = {
     asset: { version: '2.0', generator: 'Folding propeller blade generator' },
-    scene: 0, scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: 'PropellerBlade' }],
+    scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: 'PropellerBlade' }],
     materials: [{ name: 'Blade', pbrMetallicRoughness: { baseColorFactor: [0.22, 0.23, 0.25, 1], metallicFactor: 0.1, roughnessFactor: 0.55 } }],
     meshes: [{ name: 'PropellerBlade', primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, material: 0, mode: 4 }] }],
     accessors: [
       { bufferView: 0, componentType: 5126, count: nv, type: 'VEC3', min: mn, max: mx },
       { bufferView: 1, componentType: 5126, count: nv, type: 'VEC3' },
-      { bufferView: 2, componentType: 5125, count: I.length, type: 'SCALAR' },
-    ],
+      { bufferView: 2, componentType: 5125, count: I.length, type: 'SCALAR' }],
     bufferViews: [
-      { buffer: 0, byteOffset: 0,       byteLength: pB, target: 34962 },
-      { buffer: 0, byteOffset: pB,      byteLength: nB, target: 34962 },
-      { buffer: 0, byteOffset: pB + nB, byteLength: iB, target: 34963 },
-    ],
+      { buffer: 0, byteOffset: 0, byteLength: pB, target: 34962 },
+      { buffer: 0, byteOffset: pB, byteLength: nB, target: 34962 },
+      { buffer: 0, byteOffset: pB + nB, byteLength: iB, target: 34963 }],
     buffers: [{ byteLength: binLen }],
   };
-
-  const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
-  const jsonPad = (4 - (jsonBytes.length % 4)) % 4;
-  const binPad = (4 - (binLen % 4)) % 4;
-  const total = 12 + 8 + jsonBytes.length + jsonPad + 8 + binLen + binPad;
-
-  const out = new Uint8Array(total);
-  const dv = new DataView(out.buffer);
+  const jb = new TextEncoder().encode(JSON.stringify(json));
+  const jp = (4 - (jb.length % 4)) % 4, bp = (4 - (binLen % 4)) % 4;
+  const total = 12 + 8 + jb.length + jp + 8 + binLen + bp;
+  const out = new Uint8Array(total), dv = new DataView(out.buffer);
   dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
-  dv.setUint32(12, jsonBytes.length + jsonPad, true); dv.setUint32(16, 0x4E4F534A, true);
-  out.set(jsonBytes, 20);
-  for (let i = 0; i < jsonPad; i++) out[20 + jsonBytes.length + i] = 0x20;
-  const binChunk = 20 + jsonBytes.length + jsonPad;
-  dv.setUint32(binChunk, binLen + binPad, true); dv.setUint32(binChunk + 4, 0x004E4942, true);
-  out.set(bin, binChunk + 8);
+  dv.setUint32(12, jb.length + jp, true); dv.setUint32(16, 0x4E4F534A, true);
+  out.set(jb, 20);
+  for (let i = 0; i < jp; i++) out[20 + jb.length + i] = 0x20;
+  const bc = 20 + jb.length + jp;
+  dv.setUint32(bc, binLen + bp, true); dv.setUint32(bc + 4, 0x004E4942, true);
+  out.set(bin, bc + 8);
   return new Blob([out], { type: 'model/gltf-binary' });
 }
 
 function download(name, data, mime) {
   const blob = data instanceof Blob ? data : new Blob([data], { type: mime || 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 /* ============================================================================
-   5. SCENE
+   7. SCENE
    ========================================================================== */
 
 const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(stage.clientWidth, stage.clientHeight);
 stage.appendChild(renderer.domElement);
@@ -760,130 +1064,242 @@ document.getElementById('boot').remove();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x191d21);
-
 const camera = new THREE.PerspectiveCamera(38, stage.clientWidth / stage.clientHeight, 0.5, 20000);
-camera.position.set(180, -230, 165);
-camera.up.set(0, 0, 1);
-
+camera.position.set(180, -230, 165); camera.up.set(0, 0, 1);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.enableDamping = true; controls.dampingFactor = 0.08;
 
 scene.add(new THREE.HemisphereLight(0xd8e2ee, 0x20242a, 1.5));
-const key = new THREE.DirectionalLight(0xffffff, 2.1); key.position.set(180, -260, 320); scene.add(key);
-const fill = new THREE.DirectionalLight(0x9fb4cc, 0.8); fill.position.set(-220, 180, -140); scene.add(fill);
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.1); keyLight.position.set(180, -260, 320); scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x9fb4cc, 0.8); fillLight.position.set(-220, 180, -140); scene.add(fillLight);
 
-const material = new THREE.MeshStandardMaterial({
-  color: 0x353b41, metalness: 0.25, roughness: 0.45, side: THREE.DoubleSide, flatShading: false,
-});
-const wireMaterial = new THREE.MeshBasicMaterial({ color: 0x7fa7e8, wireframe: true });
+const matBody = new THREE.MeshStandardMaterial({ color: 0x353b41, metalness: 0.22, roughness: 0.46, side: THREE.DoubleSide });
+const matMetal = new THREE.MeshStandardMaterial({ color: 0xb9a06a, metalness: 0.95, roughness: 0.26, side: THREE.DoubleSide, flatShading: true });
+const matWire = new THREE.MeshBasicMaterial({ color: 0x7fa7e8, wireframe: true });
 
-const bladeMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
-const mirrorMesh = new THREE.Mesh(bladeMesh.geometry, material);
-mirrorMesh.rotation.z = Math.PI;
-scene.add(bladeMesh, mirrorMesh);
+const bodyMesh = new THREE.Mesh(new THREE.BufferGeometry(), matBody);
+const insertMesh = new THREE.Mesh(new THREE.BufferGeometry(), matMetal);
+const bodyMirror = new THREE.Mesh(bodyMesh.geometry, matBody);
+const insertMirror = new THREE.Mesh(insertMesh.geometry, matMetal);
+const pairGroup = new THREE.Group();
+pairGroup.add(bodyMirror, insertMirror); pairGroup.rotation.z = Math.PI;
+scene.add(bodyMesh, insertMesh, pairGroup);
 
-const refGroup = new THREE.Group();
-scene.add(refGroup);
-
+const refGroup = new THREE.Group(); scene.add(refGroup);
 function circle(radius, colour, dashed) {
   const pts = [];
-  for (let i = 0; i <= 128; i++) {
-    const t = TAU * i / 128;
-    pts.push(new THREE.Vector3(radius * Math.cos(t), radius * Math.sin(t), 0));
-  }
+  for (let i = 0; i <= 160; i++) { const t = TAU * i / 160; pts.push(new THREE.Vector3(radius * Math.cos(t), radius * Math.sin(t), 0)); }
   const g = new THREE.BufferGeometry().setFromPoints(pts);
-  const m = dashed
-    ? new THREE.LineDashedMaterial({ color: colour, dashSize: radius * 0.03, gapSize: radius * 0.03 })
-    : new THREE.LineBasicMaterial({ color: colour });
-  const l = new THREE.Line(g, m);
-  if (dashed) l.computeLineDistances();
+  const m = dashed ? new THREE.LineDashedMaterial({ color: colour, dashSize: radius * 0.03, gapSize: radius * 0.03 })
+                   : new THREE.LineBasicMaterial({ color: colour });
+  const l = new THREE.Line(g, m); if (dashed) l.computeLineDistances();
   return l;
 }
-
 function rebuildRefs(D) {
   refGroup.clear();
-  refGroup.add(circle(D.R, 0x4a5560, false));
-  refGroup.add(circle(D.rp, 0x38424c, true));
-  const axis = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -D.R * 0.35), new THREE.Vector3(0, 0, D.R * 0.35)]),
-    new THREE.LineBasicMaterial({ color: 0x38424c }));
-  refGroup.add(axis);
+  refGroup.add(circle(D.R, 0x4a5560, false), circle(D.rp, 0x38424c, true));
+  refGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(
+    [new THREE.Vector3(0, 0, -D.R * 0.35), new THREE.Vector3(0, 0, D.R * 0.35)]),
+    new THREE.LineBasicMaterial({ color: 0x38424c })));
   refGroup.visible = view.disc;
 }
-
 function fitView(D) {
   const d = D.R * 2.6;
   camera.position.set(d * 0.42, -d * 0.62, d * 0.45);
   controls.target.set(D.R * 0.35, 0, 0);
   camera.near = D.R / 200; camera.far = D.R * 60;
-  camera.updateProjectionMatrix();
-  controls.update();
+  camera.updateProjectionMatrix(); controls.update();
 }
 
 /* ============================================================================
-   6. BUILD + READOUT
+   8. BUILD + REPORT
    ========================================================================== */
 
 let current = null;
 
+function geoFrom(m) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
+  g.setIndex(new THREE.BufferAttribute(m.idx, 1));
+  g.computeVertexNormals(); g.computeBoundingSphere();
+  return g;
+}
+
 function rebuild(refit = false) {
   const t0 = performance.now();
   const m = buildAll();
+  const dp = designPoint();
+  m.perf = analyse(m.D, dp);
   current = m;
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
-  geo.setIndex(new THREE.BufferAttribute(m.idx, 1));
-  geo.computeVertexNormals();
-  geo.computeBoundingSphere();
-
-  bladeMesh.geometry.dispose();
-  bladeMesh.geometry = geo;
-  mirrorMesh.geometry = geo;
-  bladeMesh.material = mirrorMesh.material = view.wireframe ? wireMaterial : material;
-  mirrorMesh.visible = view.pair;
+  bodyMesh.geometry.dispose(); insertMesh.geometry.dispose();
+  bodyMesh.geometry = geoFrom(m.body);
+  insertMesh.geometry = geoFrom(m.insert);
+  bodyMirror.geometry = bodyMesh.geometry; insertMirror.geometry = insertMesh.geometry;
+  bodyMesh.material = bodyMirror.material = view.wireframe ? matWire : matBody;
+  insertMesh.material = insertMirror.material = view.wireframe ? matWire : matMetal;
+  pairGroup.visible = view.pair;
 
   rebuildRefs(m.D);
   if (refit) fitView(m.D);
-  readout(m, performance.now() - t0);
-  warn(m.D.warnings);
+  report(m, dp, performance.now() - t0);
+  drawChart(m);
+  warn(m.D.warnings.concat(perfWarnings(m, dp)));
 }
 
-function readout(m, ms) {
-  const D = m.D;
-  const rows = [];
-  const R = D.R;
-  const st = [0.25, 0.5, D.rp / R > 0.75 ? 0.8 : 0.75, 0.95];
-  const angle = f => deg(twistBlended(clamp((f * R - D.r0) / (R - D.r0), 0, 1), f * R, D));
+function perfWarnings(m, dp) {
+  const w = [], p = m.perf;
+  if (!p) return ['The hub reaches too far out to leave any aerofoil to analyse.'];
+  if (p.tipMach > state.maxTipMach)
+    w.push(`Tip Mach ${p.tipMach.toFixed(2)} is over your ${Number(state.maxTipMach).toFixed(2)} limit — keep the rpm under ${Math.round(state.maxTipMach * dp.aSound / (m.D.R / 1000) * 60 / TAU)}.`);
+  if (p.stalledFrac > 0.3) w.push(`${Math.round(p.stalledFrac * 100)}% of the span is past stall here — lower the blade angle or raise the rpm.`);
+  if (p.P > state.shaftPower * 1.05) w.push(`It needs ${Math.round(p.P)} W and you have ${state.shaftPower} W.`);
+  return w;
+}
+
+function report(m, dp, ms) {
+  const D = m.D, p = m.perf, R = D.R;
+  const angle = f => deg(twistAt(f * R, D));
   const p75 = TAU * 0.75 * R * Math.tan(rad(angle(0.75)));
+  const rows = [];
+  const add = (k, v, sep) => rows.push(`<tr${sep ? ' class="sep"' : ''}><td class="k">${k}</td><td>${v}</td></tr>`);
 
-  rows.push(['diameter', `${state.diameter.toFixed(0)} mm  (${(state.diameter / 25.4).toFixed(2)} in)`]);
-  rows.push(['blade span', `${(R - D.r0).toFixed(1)} mm from r=${D.r0.toFixed(1)}`]);
-  rows.push(['angle @ ' + state.constraintPct + '% R', `${angle(state.constraintPct / 100).toFixed(2)}°  (target ${Number(state.constraintAngle).toFixed(2)}°)`]);
-  rows.push(['angle 25 / 50 / 75 / 95', st.map(f => angle(f).toFixed(1)).join(' / ') + '°']);
-  rows.push(['pitch at 75% R', `${p75.toFixed(1)} mm  (${(p75 / 25.4).toFixed(2)} in)`]);
-  rows.push(['hub hole', `⌀${Number(state.holeDia).toFixed(2)} mm in a ⌀${(D.bossR * 2).toFixed(2)} boss`]);
-  rows.push(['mesh', `${(m.idx.length / 3).toLocaleString()} triangles · ${(m.volume / 1000).toFixed(2)} cm³ · ${ms.toFixed(0)} ms`]);
+  add('diameter', `${Number(state.diameter).toFixed(0)} mm  (${(state.diameter / 25.4).toFixed(2)} in)`);
+  add('angle @ ' + state.constraintPct + '% R', `${angle(state.constraintPct / 100).toFixed(2)}°  (asked ${Number(state.constraintAngle).toFixed(2)}°)`);
+  add('angle 25 / 50 / 75 / 95', [0.25, 0.5, 0.75, 0.95].map(f => angle(f).toFixed(1)).join(' / ') + '°');
+  add('pitch at 75% R', `${p75.toFixed(1)} mm  (${(p75 / 25.4).toFixed(2)} in)`);
+  add('insert', `⌀${Number(state.holeDia).toFixed(2)} bore, ⌀${D.insOD.toFixed(2)} × ${Number(state.insertLen).toFixed(1)} sleeve`);
+  add('mesh', `${(m.all.idx.length / 3).toLocaleString()} tri · body ${(m.volume / 1000).toFixed(2)} cm³ · ${ms.toFixed(0)} ms`);
 
-  document.getElementById('readout').innerHTML =
-    '<table>' + rows.map(r => `<tr><td class="k">${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>';
+  if (p) {
+    add('thrust', `${(p.T / G * 1000).toFixed(0)} gf  (${p.T.toFixed(2)} N)`, true);
+    add('shaft power', `${p.P.toFixed(0)} W · ${(p.Q * 1000).toFixed(0)} mN·m`);
+    add(dp.V > 0.5 ? 'propulsive efficiency' : 'figure of merit', `${((dp.V > 0.5 ? p.eta : p.FoM) * 100).toFixed(1)}%`);
+    add('per watt', `${(p.T / G * 1000 / Math.max(p.P, 1e-3)).toFixed(2)} gf/W · disc ${p.discLoad.toFixed(1)} N/m²`);
+    add('tip', `Mach ${p.tipMach.toFixed(3)} · ${(dp.om * D.R / 1000).toFixed(0)} m/s`);
+  }
+  document.getElementById('readout').innerHTML = '<table>' + rows.join('') + '</table>';
 }
 
 function warn(list) {
   const el = document.getElementById('warn');
   if (!list.length) { el.className = ''; el.textContent = ''; return; }
-  el.className = 'on';
-  el.textContent = list.join(' ');
+  el.className = 'on'; el.textContent = list.join(' ');
+}
+
+/** Chord, blade angle and angle of attack against radius. */
+function drawChart(m) {
+  const el = document.getElementById('spanchart');
+  const p = m.perf, D = m.D;
+  if (!p || p.stations.length < 2) { el.innerHTML = ''; return; }
+  const W = 300, Hh = 96, padL = 4, padR = 4, padT = 8, padB = 14;
+  const x = r => padL + (r / D.R) * (W - padL - padR);
+  const cMax = Math.max(...p.stations.map(s => s.c), 1);
+  const aMax = Math.max(15, ...p.stations.map(s => Math.abs(deg(s.beta))));
+  const yC = c => Hh - padB - (c / cMax) * (Hh - padT - padB) * 0.9;
+  const yA = a => Hh - padB - (a / aMax) * (Hh - padT - padB);
+  const poly = fn => p.stations.map(s => `${x(s.r).toFixed(1)},${fn(s).toFixed(1)}`).join(' ');
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="chord, blade angle and angle of attack against radius">
+    <rect x="${padL}" y="${padT}" width="${W-padL-padR}" height="${Hh-padT-padB}" fill="#fff" stroke="#dde1e4"/>
+    <line x1="${x(D.xEnd).toFixed(1)}" y1="${padT}" x2="${x(D.xEnd).toFixed(1)}" y2="${Hh-padB}" stroke="#cfd4d8" stroke-dasharray="2 2"/>
+    <polyline points="${poly(s => yC(s.c))}" fill="none" stroke="#8b959f" stroke-width="1.4"/>
+    <polyline points="${poly(s => yA(deg(s.beta)))}" fill="none" stroke="#1f5fd0" stroke-width="1.4"/>
+    <polyline points="${poly(s => yA(deg(s.al) * (aMax / 15)))}" fill="none" stroke="#a8600a" stroke-width="1.4" stroke-dasharray="3 2"/>
+    <text x="${padL+2}" y="${Hh-3}" font-family="IBM Plex Mono, monospace" font-size="8" fill="#8b959f">hub</text>
+    <text x="${W-padR-14}" y="${Hh-3}" font-family="IBM Plex Mono, monospace" font-size="8" fill="#8b959f">tip</text>
+  </svg>
+  <div class="legend">
+    <span><i style="background:#8b959f"></i>chord</span>
+    <span><i style="background:#1f5fd0"></i>blade angle</span>
+    <span><i style="background:#a8600a"></i>angle of attack</span>
+  </div>`;
 }
 
 /* ============================================================================
-   7. UI
+   9. SOLVER DRIVER
+   ========================================================================== */
+
+function applyDesign(fit) {
+  if (!fit) return;
+  setParam('chordRoot', fit.chordRoot);
+  setParam('chordMax', fit.chordMax);
+  setParam('chordTip', fit.chordTip);
+  setParam('maxChordPct', fit.maxChordPct);
+  if (state.solveTwist) {
+    setParam('pitch', fit.pitch);
+    setParam('constraintAngle', fit.constraintAngle);
+    state.twistMode = 'offset';
+    if (inputs.twistMode) inputs.twistMode.value = 'offset';
+  }
+}
+
+function runSolver() {
+  const out = document.getElementById('solveout');
+  const D0 = derive(), dp = designPoint();
+  let best = null, note;
+
+  const attempt = T => {
+    const des = designFor(D0, dp, T);
+    const fit = fitDesign(D0, des);
+    if (!fit) return null;
+    applyDesign(fit);
+    const a = analyse(derive(), dp, 26);
+    return a ? { des, fit, a } : null;
+  };
+  const keep = (r, err) => { if (r && (!best || err < best.err)) best = { ...r, err }; };
+
+  if (state.solveMode === 'power') {
+    note = 'sized to the power available';
+    let lo = 0.05, hi = Math.max(4, dp.T * 5);
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      const r = attempt(mid);
+      if (!r) break;
+      keep(r, Math.abs(r.a.P - dp.P) / dp.P);
+      if (r.a.P < dp.P) lo = mid; else hi = mid;
+    }
+  } else {
+    note = 'sized to the thrust target';
+    // the parametric chord model cannot follow the ideal curve exactly, so
+    // correct the design target against what the blade actually produces
+    let T = dp.T;
+    for (let k = 0; k < 7; k++) {
+      const r = attempt(T);
+      if (!r || !(r.a.T > 0)) break;
+      const err = Math.abs(r.a.T - dp.T) / dp.T;
+      keep(r, err);
+      if (err < 0.01) break;
+      T *= clamp(dp.T / r.a.T, 0.6, 1.8);
+    }
+  }
+
+  if (!best) {
+    out.textContent = 'No aerofoil left outboard of the hub to analyse — pull the hub reach in.';
+    return;
+  }
+  applyDesign(best.fit);
+  pending = true;
+
+  const p = analyse(derive(), dp);
+  const want = state.solveMode === 'power' ? state.shaftPower + ' W' : Math.round(state.targetThrust) + ' gf';
+  const miss = best.err > 0.05
+    ? `<br>it cannot reach ${want} at this diameter, rpm and blade count — this is the closest it gets`
+    : '';
+  out.innerHTML =
+    `${note}<br>thrust <b>${(p.T / G * 1000).toFixed(0)} gf</b> for <b>${p.P.toFixed(0)} W</b>, you asked ${want}<br>` +
+    `${dp.V > 0.5 ? 'efficiency' : 'figure of merit'} <b>${((dp.V > 0.5 ? p.eta : p.FoM) * 100).toFixed(1)}%</b> · ` +
+    `tip Mach <b>${p.tipMach.toFixed(2)}</b>` +
+    (best.des.capped ? '<br>chord hit the ceiling — raise it or add a blade' : '') + miss;
+}
+
+/* ============================================================================
+   10. UI
    ========================================================================== */
 
 const groupsEl = document.getElementById('groups');
-const order = ['Size', 'Root & hub', 'Pitch & twist', 'Planform', 'Aerofoil', 'Mesh'];
-const openByDefault = new Set(['Size', 'Root & hub', 'Pitch & twist']);
+const order = ['Specification', 'Design point', 'Root & hub', 'Planform', 'Aerofoil', 'Twist', 'Mesh'];
+const openByDefault = new Set(['Specification', 'Design point']);
 const inputs = {};
 
 function makeRow(p) {
@@ -900,7 +1316,6 @@ function makeRow(p) {
   rng.type = 'range'; rng.min = p.min; rng.max = p.max; rng.step = p.s; rng.value = state[p.k];
   rng.setAttribute('aria-label', p.l);
   row.append(top, rng);
-
   const set = (v, from) => {
     v = clamp(Number(v), p.min, p.max);
     if (!Number.isFinite(v)) return;
@@ -916,60 +1331,74 @@ function makeRow(p) {
   return row;
 }
 
+function selectRow(label, key, opts) {
+  const wrap = document.createElement('div'); wrap.className = 'row';
+  const lab = document.createElement('label');
+  lab.textContent = label; lab.style.display = 'block'; lab.style.marginBottom = '5px';
+  const sel = document.createElement('select'); sel.setAttribute('aria-label', label);
+  opts.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); });
+  sel.value = state[key];
+  sel.addEventListener('change', () => { state[key] = sel.value; schedule(); });
+  wrap.append(lab, sel); inputs[key] = sel;
+  return wrap;
+}
+
+function checkRow(label, key) {
+  const w = document.createElement('label'); w.className = 'check';
+  const c = document.createElement('input'); c.type = 'checkbox'; c.checked = !!state[key];
+  c.addEventListener('change', () => { state[key] = c.checked; schedule(); });
+  const s = document.createElement('span'); s.textContent = label;
+  w.append(c, s); inputs[key] = c;
+  return w;
+}
+
+const hint = text => { const h = document.createElement('p'); h.className = 'hint'; h.textContent = text; return h; };
+
 for (const g of order) {
   const det = document.createElement('details');
   if (openByDefault.has(g)) det.open = true;
+  if (g === 'Design point') det.classList.add('solver');
   const sum = document.createElement('summary'); sum.textContent = g;
   const body = document.createElement('div'); body.className = 'grp';
   det.append(sum, body);
 
-  if (g === 'Pitch & twist') {
-    const sel = document.createElement('select');
-    sel.setAttribute('aria-label', 'How the angle constraint is applied');
-    TWIST_MODES.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); });
-    sel.value = state.twistMode;
-    sel.addEventListener('change', () => { state.twistMode = sel.value; schedule(); });
-    const wrap = document.createElement('div'); wrap.className = 'row';
-    const lab = document.createElement('label'); lab.textContent = 'Angle constraint'; lab.style.display = 'block'; lab.style.marginBottom = '5px';
-    wrap.append(lab, sel);
-    body.append(wrap);
-    inputs.twistMode = sel;
+  if (g === 'Design point') {
+    body.append(hint('Blade-element momentum theory with Prandtl tip loss, read live off the current shape. The button rewrites the chord and twist to suit.'));
   }
-
   PARAMS.filter(p => p.g === g).forEach(p => body.append(makeRow(p)));
 
-  if (g === 'Size') {
-    const h = document.createElement('p'); h.className = 'hint';
-    h.textContent = 'Diameter is the full swept circle of the pair. The pivot radius is where the folding bolt sits; the aerofoil starts outboard of it.';
-    body.append(h);
+  if (g === 'Specification') {
+    body.append(selectRow('How the angle constraint is applied', 'twistMode', TWIST_MODES));
+    body.append(hint('The pitch law gives atan(P / 2πr) at every radius; the constraint pins one station and the mode decides what happens to the rest.'));
     const btns = document.createElement('div'); btns.style.display = 'flex'; btns.style.gap = '6px';
     for (const [k, lbl] of [['diameter', 'Diameter in → mm'], ['pitch', 'Pitch in → mm']]) {
       const b = document.createElement('button'); b.className = 'mini'; b.textContent = lbl;
-      b.addEventListener('click', () => { setParam(k, state[k] * 25.4); });
+      b.addEventListener('click', () => setParam(k, state[k] * 25.4));
       btns.append(b);
     }
     body.append(btns);
-  }
-  if (g === 'Pitch & twist') {
-    const h = document.createElement('p'); h.className = 'hint';
-    h.style.marginTop = '4px';
-    h.textContent = 'The pitch law gives atan(P / 2πr) at every radius. The constraint forces one station to a chosen angle; the mode decides what happens to the rest of the blade.';
-    body.append(h);
-  }
-  if (g === 'Mesh') {
-    const sel = document.createElement('select');
-    sel.setAttribute('aria-label', 'Rotation direction');
-    [['ccw', 'Counter-clockwise blade (standard)'], ['cw', 'Clockwise blade (mirrored)']]
-      .forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); });
-    sel.value = state.hand;
-    sel.addEventListener('change', () => { state.hand = sel.value; schedule(); });
-    const wrap = document.createElement('div'); wrap.className = 'row';
-    const lab = document.createElement('label'); lab.textContent = 'Handedness'; lab.style.display = 'block'; lab.style.marginBottom = '5px';
-    wrap.append(lab, sel); body.append(wrap);
-    inputs.hand = sel;
-    const h = document.createElement('p'); h.className = 'hint'; h.style.marginTop = '8px';
-    h.textContent = 'The blade and the root tab are two closed shells that overlap. Slicers union them without complaint; if your CAD package objects, raise the overlap and merge them there.';
-    body.append(h);
+  } else if (g === 'Design point') {
+    body.append(selectRow('What to solve for', 'solveMode', [
+      ['thrust', 'Hit the thrust target'],
+      ['power',  'Use all the power available']]));
+    body.append(checkRow('Let the solver set pitch and blade angle too', 'solveTwist'));
+    const go = document.createElement('button');
+    go.className = 'go'; go.textContent = 'Solve the blade';
+    go.addEventListener('click', () => {
+      go.disabled = true; go.textContent = 'Solving…';
+      setTimeout(() => { runSolver(); go.disabled = false; go.textContent = 'Solve the blade'; }, 10);
+    });
+    body.append(go);
+    const so = document.createElement('div'); so.id = 'solveout'; body.append(so);
+    const ch = document.createElement('div'); ch.id = 'spanchart'; body.append(ch);
+  } else if (g === 'Root & hub') {
+    body.append(hint('The blade loft starts inside the hub and takes over its cross-section exactly, so the two grow into one another rather than intersecting. The fillet rounds the hub edges and carries on into the blade root.'));
+  } else if (g === 'Mesh') {
+    body.append(selectRow('Handedness', 'hand', [
+      ['ccw', 'Counter-clockwise blade (standard)'],
+      ['cw',  'Clockwise blade (mirrored)']]));
+    body.append(checkRow('Include the metal insert in exported files', 'exportInsert'));
+    body.append(hint('Blade and hub are two closed shells that cross each other; slicers union them without complaint. The insert stays a separate solid.'));
   }
   groupsEl.append(det);
 }
@@ -978,58 +1407,55 @@ function setParam(k, v) {
   const p = PARAMS.find(x => x.k === k);
   if (!p) { state[k] = v; return; }
   state[k] = clamp(Number(v), p.min, p.max);
-  if (inputs[k]) { inputs[k].num.value = state[k]; inputs[k].rng.value = state[k]; }
+  if (inputs[k]) { inputs[k].num.value = +state[k].toFixed(4); inputs[k].rng.value = state[k]; }
 }
 
 function applyAll(obj) {
   Object.keys(obj).forEach(k => {
-    if (k === 'twistMode' || k === 'hand') { state[k] = obj[k]; if (inputs[k]) inputs[k].value = obj[k]; }
+    if (['twistMode', 'hand', 'solveMode'].includes(k)) { state[k] = obj[k]; if (inputs[k]) inputs[k].value = obj[k]; }
+    else if (['solveTwist', 'exportInsert'].includes(k)) { state[k] = !!obj[k]; if (inputs[k]) inputs[k].checked = state[k]; }
     else if (k in DEFAULTS) setParam(k, obj[k]);
   });
   schedule();
 }
 
-// presets
 const presetsEl = document.getElementById('presets');
 PRESETS.forEach(pr => {
   const b = document.createElement('button');
-  b.textContent = pr.n;
-  b.title = 'Load a ' + pr.n + ' inch starting point';
-  b.addEventListener('click', () => { applyAll(pr.p); pending = true; refitNext = true; });
+  b.textContent = pr.n; b.title = 'Load a ' + pr.n + ' inch starting point';
+  b.addEventListener('click', () => { applyAll(pr.p); refitNext = true; });
   presetsEl.append(b);
 });
 
-// view toggles
 const toggle = (id, key, after) => {
   const b = document.getElementById(id);
   b.setAttribute('aria-pressed', String(view[key]));
-  b.addEventListener('click', () => {
-    view[key] = !view[key];
-    b.setAttribute('aria-pressed', String(view[key]));
-    after();
-  });
+  b.addEventListener('click', () => { view[key] = !view[key]; b.setAttribute('aria-pressed', String(view[key])); after(); });
 };
-toggle('btn-wire', 'wireframe', () => { bladeMesh.material = mirrorMesh.material = view.wireframe ? wireMaterial : material; });
-toggle('btn-pair', 'pair', () => { mirrorMesh.visible = view.pair; });
+toggle('btn-wire', 'wireframe', () => {
+  bodyMesh.material = bodyMirror.material = view.wireframe ? matWire : matBody;
+  insertMesh.material = insertMirror.material = view.wireframe ? matWire : matMetal;
+});
+toggle('btn-pair', 'pair', () => { pairGroup.visible = view.pair; });
 toggle('btn-disc', 'disc', () => { refGroup.visible = view.disc; });
 document.getElementById('btn-fit').addEventListener('click', () => { if (current) fitView(current.D); });
 
-// exports
 document.getElementById('exports').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn || !current) return;
-  const { pos, idx } = current;
+  const m = state.exportInsert ? current.all : current.body;
+  const { pos, idx, ranges } = m;
+  const names = ['blade', 'hub', 'insert'];
   const base = `prop_${Math.round(state.diameter)}x${Math.round(state.pitch)}_blade`;
   switch (btn.dataset.fmt) {
     case 'stlb': download(base + '.stl', stlBinary(pos, idx)); break;
     case 'stla': download(base + '_ascii.stl', stlAscii(pos, idx), 'model/stl'); break;
-    case 'obj':  download(base + '.obj', objText(pos, idx), 'model/obj'); break;
+    case 'obj':  download(base + '.obj', objText(pos, idx, ranges, names), 'model/obj'); break;
     case 'ply':  download(base + '.ply', plyText(pos, idx), 'text/plain'); break;
     case 'glb':  download(base + '.glb', glb(pos, idx)); break;
     case 'json': download(base + '.json', JSON.stringify(state, null, 2), 'application/json'); break;
   }
 });
 
-// share link / reset
 document.getElementById('copylink').addEventListener('click', async e => {
   const hash = '#' + btoa(JSON.stringify(state)).replace(/=+$/, '');
   const url = location.origin + location.pathname + hash;
@@ -1044,7 +1470,7 @@ document.getElementById('reset').addEventListener('click', () => {
 });
 
 /* ============================================================================
-   8. LOOP
+   11. LOOP
    ========================================================================== */
 
 let pending = true, refitNext = true;
@@ -1054,24 +1480,21 @@ function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   if (!w || !h) return;
   renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 
-// restore from the URL hash if there is one
 if (location.hash.length > 1) {
   try { applyAll(JSON.parse(atob(location.hash.slice(1)))); } catch (err) { /* ignore a bad hash */ }
 }
 
 resize();
-function tick() {
+(function tick() {
   if (pending) { pending = false; rebuild(refitNext); refitNext = false; }
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
-}
-tick();
+})();
 </script>
 </body>
 </html>
