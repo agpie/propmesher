@@ -36,12 +36,19 @@
   #railhead{padding:16px 18px 13px; border-bottom:1px solid var(--line)}
   #railhead h1{margin:0; font-size:15px; font-weight:600; letter-spacing:-0.01em; line-height:1.25}
   #railhead p{margin:6px 0 0; font-size:12px; line-height:1.45; color:var(--ink-2); max-width:36ch}
-  #presets{display:flex; gap:6px; flex-wrap:wrap; margin-top:11px}
+  #presets{display:flex; gap:6px; flex-wrap:wrap}
   #presets button{font:500 11px/1 var(--mono); padding:6px 8px; border:1px solid var(--line);
     background:var(--panel-2); color:var(--ink-2); border-radius:3px; cursor:pointer}
   #presets button:hover{border-color:var(--accent); color:var(--accent)}
 
-  #groups{overflow-y:auto; flex:1; min-height:0; padding-bottom:8px}
+  #tabs{display:flex; background:var(--panel-2); border-bottom:1px solid var(--line)}
+  #tabs button{flex:1; font:600 12px/1 var(--sans); padding:11px 4px; border:none; background:none;
+    color:var(--ink-3); cursor:pointer; border-bottom:2px solid transparent; letter-spacing:-0.005em}
+  #tabs button:hover{color:var(--ink-2)}
+  #tabs button[aria-selected=true]{color:var(--accent); border-bottom-color:var(--accent); background:var(--panel)}
+  #pages{overflow-y:auto; flex:1; min-height:0; padding-bottom:8px}
+  .page[hidden]{display:none}
+  #presets{padding:12px 18px 0}
   details{border-bottom:1px solid var(--line-2)}
   details summary{list-style:none; cursor:pointer; padding:11px 18px; font-size:12.5px; font-weight:600;
     display:flex; align-items:center; gap:8px; user-select:none}
@@ -71,6 +78,18 @@
     border:1.5px solid var(--ink-2); cursor:pointer}
   input[type=range]:focus-visible::-webkit-slider-thumb{border-color:var(--accent); box-shadow:0 0 0 3px rgba(31,95,208,.25)}
   .hint{font-size:11px; line-height:1.45; color:var(--ink-3); margin:-2px 0 12px}
+  .lockslot{width:20px; flex:none; display:flex; justify-content:flex-end}
+  .lock{width:20px; height:20px; padding:0; border:1px solid transparent; background:none; cursor:pointer;
+    color:var(--ink-3); border-radius:3px; display:grid; place-content:center}
+  .lock:hover{border-color:var(--line); color:var(--ink-2)}
+  .lock[aria-pressed=true]{color:var(--accent)}
+  .lock svg{width:12px; height:14px; display:block; fill:none; stroke:currentColor; stroke-width:1.5}
+  .lock[aria-pressed=false] svg rect{opacity:.45}
+  .freelist{font:400 11px/1.6 var(--mono); color:var(--ink-2); background:var(--panel-2);
+    border:1px solid var(--line-2); border-radius:3px; padding:8px 10px; margin:0 0 9px}
+  .freelist b{color:var(--ink); font-weight:500}
+  .lockrow{display:flex; gap:6px; margin:0 0 12px}
+  .lockrow button{flex:1}
   select{width:100%; font:400 12px/1 var(--sans); padding:5px 6px; border:1px solid var(--line);
     background:#fff; color:var(--ink); border-radius:3px}
   .check{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-2); margin:0 0 10px}
@@ -89,16 +108,16 @@
   .legend{font:400 10px/1.5 var(--mono); color:var(--ink-3); display:flex; gap:12px; margin-top:3px; flex-wrap:wrap}
   .legend i{display:inline-block; width:9px; height:2px; vertical-align:middle; margin-right:4px}
 
-  #railfoot{border-top:1px solid var(--line); padding:12px 18px 14px; background:var(--panel-2)}
-  #railfoot .lbl{font-size:11px; color:var(--ink-3); margin:0 0 7px}
+  .lbl{font-size:11px; color:var(--ink-3); margin:12px 0 7px}
   #exports{display:grid; grid-template-columns:1fr 1fr; gap:6px}
   #exports button{font:500 12px/1 var(--sans); padding:8px 6px; border:1px solid var(--line); background:#fff;
     color:var(--ink); border-radius:3px; cursor:pointer; text-align:left}
   #exports button:hover{border-color:var(--accent); color:var(--accent)}
   #exports button b{font:500 12px/1 var(--mono)}
   #exports button span{display:block; font-size:10px; color:var(--ink-3); margin-top:3px}
-  #utilrow{display:flex; gap:6px; margin-top:8px}
+  #utilrow{display:flex; gap:6px; margin-top:12px}
   #utilrow button{flex:1}
+  #exports button{background:var(--panel-2)}
 
   #stage{position:relative; min-width:0; background:var(--stage)}
   #stage canvas{display:block; width:100%; height:100%}
@@ -137,24 +156,37 @@
   <aside id="rail">
     <div id="railhead">
       <h1>Folding propeller blade generator</h1>
-      <p>Give it the numbers you have. The solver works out the chord and twist from your thrust, power and rpm.</p>
-      <div id="presets"></div>
+      <p>Give it the numbers you have, lock whatever is already fixed, and let the solver work out the rest.</p>
     </div>
-    <div id="groups"></div>
-    <div id="railfoot">
-      <p class="lbl">Download the mesh</p>
-      <div id="exports">
-        <button data-fmt="stlb"><b>STL</b><span>binary, for slicers</span></button>
-        <button data-fmt="stla"><b>STL</b><span>ascii</span></button>
-        <button data-fmt="obj"><b>OBJ</b><span>grouped, with normals</span></button>
-        <button data-fmt="ply"><b>PLY</b><span>ascii</span></button>
-        <button data-fmt="glb"><b>GLB</b><span>glTF 2.0, Y-up</span></button>
-        <button data-fmt="json"><b>JSON</b><span>parameters</span></button>
-      </div>
-      <div id="utilrow">
-        <button class="mini" id="copylink">Copy link to this blade</button>
-        <button class="mini" id="reset">Reset</button>
-      </div>
+    <nav id="tabs" role="tablist" aria-label="Panels">
+      <button role="tab" data-tab="blade"  aria-selected="true"  aria-controls="page-blade">Blade</button>
+      <button role="tab" data-tab="solve"  aria-selected="false" aria-controls="page-solve">Optimiser</button>
+      <button role="tab" data-tab="export" aria-selected="false" aria-controls="page-export">Export</button>
+    </nav>
+    <div id="pages">
+      <section id="page-blade" class="page" role="tabpanel" aria-label="Blade">
+        <div id="presets"></div>
+        <div id="groups-blade"></div>
+      </section>
+      <section id="page-solve" class="page" role="tabpanel" aria-label="Optimiser" hidden></section>
+      <section id="page-export" class="page" role="tabpanel" aria-label="Export" hidden>
+        <div class="grp">
+          <p class="lbl">Download the mesh</p>
+          <div id="exports">
+            <button data-fmt="stlb"><b>STL</b><span>binary, for slicers</span></button>
+            <button data-fmt="stla"><b>STL</b><span>ascii</span></button>
+            <button data-fmt="obj"><b>OBJ</b><span>grouped, with normals</span></button>
+            <button data-fmt="ply"><b>PLY</b><span>ascii</span></button>
+            <button data-fmt="glb"><b>GLB</b><span>glTF 2.0, Y-up</span></button>
+            <button data-fmt="json"><b>JSON</b><span>parameters</span></button>
+          </div>
+          <div id="exportopts"></div>
+          <div id="utilrow">
+            <button class="mini" id="copylink">Copy link to this blade</button>
+            <button class="mini" id="reset">Reset</button>
+          </div>
+        </div>
+      </section>
     </div>
   </aside>
 
@@ -244,10 +276,22 @@ PARAMS.forEach(p => DEFAULTS[p.k] = p.v);
 DEFAULTS.twistMode = 'offset';
 DEFAULTS.hand = 'ccw';
 DEFAULTS.solveMode = 'thrust';
-DEFAULTS.solveTwist = true;
 DEFAULTS.exportInsert = false;
 
-const state = Object.assign({}, DEFAULTS);
+/**
+ * What the solver is allowed to write. Outer variables are searched by the
+ * optimiser one at a time; inner ones fall out of the blade-element design and
+ * are written straight back. Anything locked is held exactly where you put it.
+ */
+const SOLVER_OUTER = ['diameter', 'rpm', 'blades', 'camber'];
+const SOLVER_INNER = ['pitch', 'constraintAngle', 'chordRoot', 'chordMax', 'chordTip', 'maxChordPct'];
+const LOCKABLE = SOLVER_OUTER.concat(SOLVER_INNER);
+// the things you usually already know start locked; the shape does not
+DEFAULTS.locks = { diameter: true, rpm: true, blades: true, camber: true,
+                   pitch: false, constraintAngle: false,
+                   chordRoot: false, chordMax: false, chordTip: false, maxChordPct: false };
+
+const state = Object.assign({}, DEFAULTS, { locks: Object.assign({}, DEFAULTS.locks) });
 const view = { wireframe:false, pair:true, disc:true };
 
 const TWIST_MODES = [
@@ -800,7 +844,7 @@ function designFor(D, dp, T, N = 30) {
   const R = D.R / 1000, A = Math.PI * R * R;
   const cl0 = 0.11 * state.camber;
   const rStart = Math.max(D.xEnd + D.blendLen * 0.35, D.r0 + 1e-3) / 1000;
-  if (rStart >= R * 0.97) return { stations: [], capped: false };
+  if (rStart >= R * 0.97) return { stations: [], cappedFrac: 0 };
   const cCap = state.maxChordPctR / 100 * D.R / 1000;
   const dr = (R - rStart) / N;
   const rs = [];
@@ -829,7 +873,7 @@ function designFor(D, dp, T, N = 30) {
   }
 
   const out = [];
-  let capped = false;
+  let capped = 0;
   for (let i = 0; i < N; i++) {
     const rm = rs[i], u = (rm * 1000 - D.r0) / (D.R - D.r0);
     const tc = lerp(state.thickRoot, state.thickTip, u) / 100;
@@ -849,12 +893,12 @@ function designFor(D, dp, T, N = 30) {
       // than the thrust it returns
       const taper = lerp(0.55, 1, smooth((rm / R - 0.15) / 0.30));
       let cN = taper * load[i] / (B * 0.5 * rho * W[i] * W[i] * eff);
-      if (cN > cCap) { cN = cCap; capped = true; }
+      if (cN > cCap) { cN = cCap; if (it === 13) capped++; }
       c = clamp(c + 0.7 * (cN - c), 1e-4, cCap);
     }
     out.push({ r: rm * 1000, c: c * 1000, beta: phi[i] + alD });
   }
-  return { stations: out, capped };
+  return { stations: out, cappedFrac: capped / N };
 }
 
 /** The declared range of a parameter, so fitted values are clamped to what the
@@ -1152,7 +1196,13 @@ function perfWarnings(m, dp) {
   if (!p) return ['The hub reaches too far out to leave any aerofoil to analyse.'];
   if (p.tipMach > state.maxTipMach)
     w.push(`Tip Mach ${p.tipMach.toFixed(2)} is over your ${Number(state.maxTipMach).toFixed(2)} limit — keep the rpm under ${Math.round(state.maxTipMach * dp.aSound / (m.D.R / 1000) * 60 / TAU)}.`);
-  if (p.stalledFrac > 0.3) w.push(`${Math.round(p.stalledFrac * 100)}% of the span is past stall here — lower the blade angle or raise the rpm.`);
+  // a propeller standing still always runs its inboard sections past stall,
+  // so only flag it when there is much more of it than that
+  const stallLim = dp.V > 2 ? 0.25 : 0.55;
+  if (p.stalledFrac > stallLim)
+    w.push(`${Math.round(p.stalledFrac * 100)}% of the working span is past stall` +
+      (dp.V > 2 ? '' : ' — some of that is normal at rest, but this is a lot') +
+      '. Lower the blade angle or raise the rpm.');
   if (p.P > state.shaftPower * 1.05) w.push(`It needs ${Math.round(p.P)} W and you have ${state.shaftPower} W.`);
   return w;
 }
@@ -1220,87 +1270,225 @@ function drawChart(m) {
    9. SOLVER DRIVER
    ========================================================================== */
 
+const freeVar = k => !state.locks[k];
+
+/** Write a fitted design back, skipping anything you have locked. */
 function applyDesign(fit) {
   if (!fit) return;
-  setParam('chordRoot', fit.chordRoot);
-  setParam('chordMax', fit.chordMax);
-  setParam('chordTip', fit.chordTip);
-  setParam('maxChordPct', fit.maxChordPct);
-  if (state.solveTwist) {
-    setParam('pitch', fit.pitch);
-    setParam('constraintAngle', fit.constraintAngle);
+  for (const k of ['chordRoot', 'chordMax', 'chordTip', 'maxChordPct'])
+    if (freeVar(k)) setParam(k, fit[k]);
+  if (freeVar('pitch') || freeVar('constraintAngle')) {
+    if (freeVar('pitch')) setParam('pitch', fit.pitch);
+    if (freeVar('constraintAngle')) setParam('constraintAngle', fit.constraintAngle);
+    // the fitted twist assumes the constrained station is honoured exactly
     state.twistMode = 'offset';
     if (inputs.twistMode) inputs.twistMode.value = 'offset';
   }
 }
 
-function runSolver() {
-  const out = document.getElementById('solveout');
+/**
+ * One blade-element design at the current diameter, rpm, blade count and camber.
+ * `fast` trades a little accuracy for speed, for use inside the outer search.
+ */
+function solveOnce(fast) {
   const D0 = derive(), dp = designPoint();
-  let best = null, note;
+  const dN = fast ? 12 : 30, aN = fast ? 12 : 26;
+  let best = null;
 
   const attempt = T => {
-    const des = designFor(D0, dp, T);
+    const des = designFor(D0, dp, T, dN);
     const fit = fitDesign(D0, des);
     if (!fit) return null;
     applyDesign(fit);
-    const a = analyse(derive(), dp, 26);
-    return a ? { des, fit, a } : null;
+    const a = analyse(derive(), dp, aN);
+    return a ? { des, a, T } : null;
   };
-  const keep = (r, err) => { if (r && (!best || err < best.err)) best = { ...r, err }; };
 
   if (state.solveMode === 'power') {
-    note = 'sized to the power available';
-    let lo = 0.05, hi = Math.max(4, dp.T * 5);
-    for (let i = 0; i < 16; i++) {
-      const mid = (lo + hi) / 2;
-      const r = attempt(mid);
-      if (!r) break;
-      keep(r, Math.abs(r.a.P - dp.P) / dp.P);
-      if (r.a.P < dp.P) lo = mid; else hi = mid;
+    // P rises roughly as T^1.5, so step straight at the answer rather than
+    // bisecting a wide bracket on every candidate
+    let T = dp.T;
+    for (let k = 0; k < (fast ? 4 : 8); k++) {
+      const r = attempt(T);
+      if (!r || !(r.a.P > 0)) break;
+      const e = Math.abs(r.a.P - dp.P) / Math.max(dp.P, 1e-6);
+      if (!best || e < best.err) best = Object.assign({ err: e }, r);
+      if (e < 0.01) break;
+      T *= clamp(Math.pow(dp.P / r.a.P, 2 / 3), 0.55, 1.9);
     }
   } else {
-    note = 'sized to the thrust target';
     // the parametric chord model cannot follow the ideal curve exactly, so
     // correct the design target against what the blade actually produces
     let T = dp.T;
-    for (let k = 0; k < 7; k++) {
+    for (let k = 0; k < (fast ? 3 : 7); k++) {
       const r = attempt(T);
       if (!r || !(r.a.T > 0)) break;
-      const err = Math.abs(r.a.T - dp.T) / dp.T;
-      keep(r, err);
-      if (err < 0.01) break;
+      const e = Math.abs(r.a.T - dp.T) / dp.T;
+      if (!best || e < best.err) best = Object.assign({ err: e }, r);
+      if (e < 0.01) break;
       T *= clamp(dp.T / r.a.T, 0.6, 1.8);
     }
   }
+  // only the full-fidelity pass has to leave the parameters on its best design;
+  // while scanning we just need the score, and each candidate redesigns anyway
+  if (best && !fast) attempt(best.T);
+  return best;
+}
 
-  if (!best) {
-    out.textContent = 'No aerofoil left outboard of the hub to analyse — pull the hub reach in.';
+/**
+ * Lower is better. Candidates are scored on what they would cost at exactly the
+ * thrust asked for (or give at exactly the power available), using the momentum
+ * relation P ~ T^1.5. Scoring the raw numbers instead would just measure how far
+ * each coarse trial happened to land from the target.
+ */
+function scoreOf(best, dp, ref) {
+  if (!best || !(best.a.T > 0) || !(best.a.P > 0)) return Infinity;
+  const a = best.a;
+  const r = state.solveMode === 'power' ? dp.P / a.P : dp.T / a.T;
+  let c = state.solveMode === 'power'
+    ? -a.T * Math.pow(clamp(r, 0.6, 1.7), 2 / 3) / ref.T
+    : a.P * Math.pow(clamp(r, 0.6, 1.7), 1.5) / ref.P;
+  if (state.solveMode !== 'power') c += 10 * Math.max(0, c - 1);
+  // outside that band the extrapolation is not worth trusting, so make any such
+  // candidate plainly worse than a feasible one while still pointing downhill
+  if (r > 1.7) c += 5 + 5 * Math.log(r / 1.7);
+  if (r < 0.6) c += 5 + 5 * Math.log(0.6 / r);
+  c += 30 * Math.max(0, a.tipMach - state.maxTipMach);
+  return c;
+}
+
+/** Candidate values for an outer variable, narrowing on each pass. */
+function samplesFor(k, pass, n) {
+  const p = PARAMS.find(x => x.k === k), cur = state[k];
+  if (k === 'blades') {
+    const out = [];
+    for (let b = Math.max(2, p.min); b <= p.max; b++) out.push(b);
+    return out;
+  }
+  if (k === 'camber') {
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(p.min + (p.max - p.min) * i / (n - 1));
+    return out;
+  }
+  const w = [1.8, 1.28, 1.08][Math.min(pass, 2)];
+  let lo = Math.max(p.min, cur / w), hi = Math.min(p.max, cur * w);
+  if (k === 'rpm') {
+    // never propose a speed that breaks the tip Mach limit
+    const air = atmosphere(state.altitude);
+    hi = Math.min(hi, state.maxTipMach * air.a / (derive().R / 1000) * 60 / TAU);
+  }
+  if (!(hi > lo)) return [clamp(cur, p.min, p.max)];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(lo * Math.pow(hi / lo, i / (n - 1)));
+  if (cur >= lo && cur <= hi) out.push(cur);
+  return out;
+}
+
+function runSolver() {
+  const out = document.getElementById('solveout');
+  const freeOuter = SOLVER_OUTER.filter(freeVar);
+  const freeInner = SOLVER_INNER.filter(freeVar);
+  if (!freeOuter.length && !freeInner.length) {
+    out.innerHTML = 'Everything the solver can change is locked. Unlock at least one thing for it to work with.';
     return;
   }
-  applyDesign(best.fit);
+  const before = {};
+  LOCKABLE.forEach(k => before[k] = state[k]);
+
+  quiet = true;
+  let best;
+  try {
+    const ref = { P: Math.max(state.shaftPower, 1), T: Math.max(designPoint().T, 1e-3) };
+    if (freeOuter.length) {
+      const passes = freeOuter.length > 2 ? 2 : 3;
+      const n = freeOuter.length > 2 ? 7 : 9;
+      for (let pass = 0; pass < passes; pass++) {
+        for (const k of freeOuter) {
+          let bestVal = state[k], bestScore = Infinity;
+          for (const v of samplesFor(k, pass, n)) {
+            setParam(k, v);
+            const sc = scoreOf(solveOnce(true), designPoint(), ref);
+            if (sc < bestScore) { bestScore = sc; bestVal = v; }
+          }
+          setParam(k, bestVal);
+        }
+      }
+      freeOuter.forEach(k => setParam(k, snap(k, state[k])));
+    }
+    best = solveOnce(false);
+    // land on values you can actually type back in, then judge the result on those
+    LOCKABLE.filter(freeVar).forEach(k => setParam(k, snap(k, state[k])));
+  } finally {
+    quiet = false;
+    syncInputs();
+  }
   pending = true;
 
+  if (!best) {
+    out.innerHTML = 'No aerofoil left outboard of the hub to analyse — pull the hub reach in.';
+    return;
+  }
+
+  const dp = designPoint();
   const p = analyse(derive(), dp);
-  const want = state.solveMode === 'power' ? state.shaftPower + ' W' : Math.round(state.targetThrust) + ' gf';
-  const miss = best.err > 0.05
-    ? `<br>it cannot reach ${want} at this diameter, rpm and blade count — this is the closest it gets`
-    : '';
+  if (!p) { out.innerHTML = 'No aerofoil left outboard of the hub to analyse — pull the hub reach in.'; return; }
+
+  const power = state.solveMode === 'power';
+  const want = power ? Math.round(state.shaftPower) + ' W' : Math.round(state.targetThrust) + ' gf';
+  const miss = power ? Math.abs(p.P - dp.P) / Math.max(dp.P, 1e-6)
+                     : Math.abs(p.T - dp.T) / Math.max(dp.T, 1e-9);
+  const atLimit = k => {
+    const q = PARAMS.find(x => x.k === k);
+    return state[k] <= q.min + 1e-9 || state[k] >= q.max - 1e-9;
+  };
+  const moved = SOLVER_OUTER.filter(k => freeVar(k) && Math.abs(state[k] - before[k]) > 1e-9)
+    .map(k => `${PARAMS.find(x => x.k === k).l.toLowerCase()} ${snap(k, before[k])} → ${state[k]}` +
+              (atLimit(k) ? ' (at the slider limit)' : ''));
+
   out.innerHTML =
-    `${note}<br>thrust <b>${(p.T / G * 1000).toFixed(0)} gf</b> for <b>${p.P.toFixed(0)} W</b>, you asked ${want}<br>` +
+    `${power ? 'sized to the power available' : 'sized to the thrust target'}<br>` +
+    `thrust <b>${(p.T / G * 1000).toFixed(0)} gf</b> for <b>${p.P.toFixed(0)} W</b>, you asked ${want}<br>` +
     `${dp.V > 0.5 ? 'efficiency' : 'figure of merit'} <b>${((dp.V > 0.5 ? p.eta : p.FoM) * 100).toFixed(1)}%</b> · ` +
     `tip Mach <b>${p.tipMach.toFixed(2)}</b>` +
-    (best.des.capped ? '<br>chord hit the ceiling — raise it or add a blade' : '') + miss;
+    (moved.length ? '<br>changed ' + moved.join(', ') : '') +
+    // the ideal chord always clips at the root, so only mention it when it bit
+    (best.des.cappedFrac > 0.5 || (miss > 0.05 && best.des.cappedFrac > 0.1)
+      ? '<br>the chord ceiling is holding it back — raise it, add a blade, or unlock the diameter' : '') +
+    (miss > 0.05 ? `<br>it cannot reach ${want} with what is unlocked — this is the closest it gets` : '');
 }
 
 /* ============================================================================
    10. UI
    ========================================================================== */
 
-const groupsEl = document.getElementById('groups');
-const order = ['Specification', 'Design point', 'Root & hub', 'Planform', 'Aerofoil', 'Twist', 'Mesh'];
-const openByDefault = new Set(['Specification', 'Design point']);
-const inputs = {};
+const order = ['Specification', 'Root & hub', 'Planform', 'Aerofoil', 'Twist', 'Mesh'];
+const openByDefault = new Set(['Specification']);
+const inputs = {}, lockBtns = {};
+
+const LOCK_SVG = shut => `<svg viewBox="0 0 14 16" aria-hidden="true">` +
+  `<rect x="1.6" y="6.6" width="10.8" height="8.2" rx="1.6"/>` +
+  (shut ? `<path d="M4 6.6 V4.4 a3 3 0 0 1 6 0 V6.6"/>` : `<path d="M4 6.6 V4.4 a3 3 0 0 1 6 0"/>`) +
+  `</svg>`;
+
+/** Padlock that decides whether the solver may rewrite this parameter. */
+function lockSlot(k) {
+  const slot = document.createElement('span'); slot.className = 'lockslot';
+  if (!LOCKABLE.includes(k)) return slot;
+  const b = document.createElement('button');
+  b.className = 'lock'; b.type = 'button';
+  const paint = () => {
+    const shut = !!state.locks[k];
+    b.setAttribute('aria-pressed', String(shut));
+    b.innerHTML = LOCK_SVG(shut);
+    b.title = shut ? 'Locked — the solver will leave this alone' : 'Free — the solver may change this';
+    b.setAttribute('aria-label', b.title);
+  };
+  b.addEventListener('click', () => { state.locks[k] = !state.locks[k]; paint(); refreshFreeList(); });
+  paint();
+  lockBtns[k] = paint;
+  slot.append(b);
+  return slot;
+}
 
 function makeRow(p) {
   const row = document.createElement('div'); row.className = 'row';
@@ -1311,7 +1499,7 @@ function makeRow(p) {
   num.type = 'number'; num.id = 'n_' + p.k; num.value = state[p.k];
   num.min = p.min; num.max = p.max; num.step = p.s;
   const unit = document.createElement('span'); unit.className = 'unit'; unit.textContent = p.u;
-  val.append(num, unit); top.append(lab, val);
+  val.append(num, unit, lockSlot(p.k)); top.append(lab, val);
   const rng = document.createElement('input');
   rng.type = 'range'; rng.min = p.min; rng.max = p.max; rng.step = p.s; rng.value = state[p.k];
   rng.setAttribute('aria-label', p.l);
@@ -1354,22 +1542,29 @@ function checkRow(label, key) {
 
 const hint = text => { const h = document.createElement('p'); h.className = 'hint'; h.textContent = text; return h; };
 
+/* ---- tabs ------------------------------------------------------------- */
+const tabsEl = document.getElementById('tabs');
+tabsEl.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  [...tabsEl.children].forEach(t => t.setAttribute('aria-selected', String(t === b)));
+  ['blade', 'solve', 'export'].forEach(n =>
+    document.getElementById('page-' + n).hidden = (n !== b.dataset.tab));
+});
+
+/* ---- blade page ------------------------------------------------------- */
+const bladeEl = document.getElementById('groups-blade');
 for (const g of order) {
   const det = document.createElement('details');
   if (openByDefault.has(g)) det.open = true;
-  if (g === 'Design point') det.classList.add('solver');
   const sum = document.createElement('summary'); sum.textContent = g;
   const body = document.createElement('div'); body.className = 'grp';
   det.append(sum, body);
-
-  if (g === 'Design point') {
-    body.append(hint('Blade-element momentum theory with Prandtl tip loss, read live off the current shape. The button rewrites the chord and twist to suit.'));
-  }
   PARAMS.filter(p => p.g === g).forEach(p => body.append(makeRow(p)));
 
   if (g === 'Specification') {
     body.append(selectRow('How the angle constraint is applied', 'twistMode', TWIST_MODES));
-    body.append(hint('The pitch law gives atan(P / 2πr) at every radius; the constraint pins one station and the mode decides what happens to the rest.'));
+    body.append(hint('The pitch law gives atan(P / 2πr) at every radius; the constraint pins one station and the mode decides what happens to the rest. A closed padlock means the solver leaves that value exactly where you put it.'));
     const btns = document.createElement('div'); btns.style.display = 'flex'; btns.style.gap = '6px';
     for (const [k, lbl] of [['diameter', 'Diameter in → mm'], ['pitch', 'Pitch in → mm']]) {
       const b = document.createElement('button'); b.className = 'mini'; b.textContent = lbl;
@@ -1377,43 +1572,102 @@ for (const g of order) {
       btns.append(b);
     }
     body.append(btns);
-  } else if (g === 'Design point') {
-    body.append(selectRow('What to solve for', 'solveMode', [
-      ['thrust', 'Hit the thrust target'],
-      ['power',  'Use all the power available']]));
-    body.append(checkRow('Let the solver set pitch and blade angle too', 'solveTwist'));
-    const go = document.createElement('button');
-    go.className = 'go'; go.textContent = 'Solve the blade';
-    go.addEventListener('click', () => {
-      go.disabled = true; go.textContent = 'Solving…';
-      setTimeout(() => { runSolver(); go.disabled = false; go.textContent = 'Solve the blade'; }, 10);
-    });
-    body.append(go);
-    const so = document.createElement('div'); so.id = 'solveout'; body.append(so);
-    const ch = document.createElement('div'); ch.id = 'spanchart'; body.append(ch);
   } else if (g === 'Root & hub') {
     body.append(hint('The blade loft starts inside the hub and takes over its cross-section exactly, so the two grow into one another rather than intersecting. The fillet rounds the hub edges and carries on into the blade root.'));
   } else if (g === 'Mesh') {
     body.append(selectRow('Handedness', 'hand', [
       ['ccw', 'Counter-clockwise blade (standard)'],
       ['cw',  'Clockwise blade (mirrored)']]));
-    body.append(checkRow('Include the metal insert in exported files', 'exportInsert'));
-    body.append(hint('Blade and hub are two closed shells that cross each other; slicers union them without complaint. The insert stays a separate solid.'));
   }
-  groupsEl.append(det);
+  bladeEl.append(det);
 }
+
+/* ---- optimiser page --------------------------------------------------- */
+const solveEl = document.getElementById('page-solve');
+{
+  const body = document.createElement('div'); body.className = 'grp';
+  body.append(hint('Blade-element momentum theory with Prandtl tip loss, read live off the current shape. Lock what is already decided; the solver searches whatever is left. Diameter and rpm will both run to their limits if you leave them free, because a bigger, slower disc is always more efficient — lock them to what your airframe and drive actually allow.'));
+  PARAMS.filter(p => p.g === 'Design point').forEach(p => body.append(makeRow(p)));
+  body.append(selectRow('What to solve for', 'solveMode', [
+    ['thrust', 'Hit the thrust target'],
+    ['power',  'Use all the power available']]));
+
+  const fl = document.createElement('p'); fl.className = 'freelist'; fl.id = 'freelist';
+  body.append(fl);
+  const lr = document.createElement('div'); lr.className = 'lockrow';
+  for (const [lbl, val] of [['Lock everything', true], ['Unlock everything', false]]) {
+    const b = document.createElement('button'); b.className = 'mini'; b.textContent = lbl;
+    b.addEventListener('click', () => {
+      LOCKABLE.forEach(k => { state.locks[k] = val; if (lockBtns[k]) lockBtns[k](); });
+      refreshFreeList();
+    });
+    lr.append(b);
+  }
+  body.append(lr);
+
+  const go = document.createElement('button');
+  go.className = 'go'; go.textContent = 'Solve the blade';
+  go.addEventListener('click', () => {
+    go.disabled = true; go.textContent = 'Solving…';
+    setTimeout(() => { runSolver(); go.disabled = false; go.textContent = 'Solve the blade'; }, 10);
+  });
+  body.append(go);
+  const so = document.createElement('div'); so.id = 'solveout'; body.append(so);
+  const ch = document.createElement('div'); ch.id = 'spanchart'; body.append(ch);
+  solveEl.append(body);
+}
+
+/** Keep the "solver may change" summary in step with the padlocks. */
+function refreshFreeList() {
+  const el = document.getElementById('freelist');
+  if (!el) return;
+  const free = LOCKABLE.filter(freeVar).map(k => PARAMS.find(x => x.k === k).l.toLowerCase());
+  el.innerHTML = free.length
+    ? 'the solver may change:<br><b>' + free.join('</b>, <b>') + '</b>'
+    : 'everything is locked — the solver has nothing to change';
+}
+refreshFreeList();
+
+/* ---- export page ------------------------------------------------------ */
+{
+  const opts = document.getElementById('exportopts');
+  opts.append(checkRow('Include the metal insert in exported files', 'exportInsert'));
+  opts.append(hint('Blade and hub are two closed shells that cross each other; slicers union them without complaint. The insert stays a separate solid, and gets its own group in the OBJ. STL, OBJ and PLY are Z-up in millimetres; GLB is converted to Y-up.'));
+}
+
+let quiet = false;   // the solver writes parameters thousands of times; skip the DOM until it is done
 
 function setParam(k, v) {
   const p = PARAMS.find(x => x.k === k);
   if (!p) { state[k] = v; return; }
   state[k] = clamp(Number(v), p.min, p.max);
-  if (inputs[k]) { inputs[k].num.value = +state[k].toFixed(4); inputs[k].rng.value = state[k]; }
+  if (!quiet && inputs[k]) { inputs[k].num.value = +state[k].toFixed(4); inputs[k].rng.value = state[k]; }
+}
+
+function syncInputs() {
+  PARAMS.forEach(p => {
+    if (inputs[p.k]) { inputs[p.k].num.value = +state[p.k].toFixed(4); inputs[p.k].rng.value = state[p.k]; }
+  });
+}
+
+/** Round to the parameter's own increment, so solved values are usable numbers. */
+function snap(k, v) {
+  const p = PARAMS.find(x => x.k === k);
+  if (!p || !(p.s > 0)) return v;
+  return +(Math.round(v / p.s) * p.s).toFixed(6);
 }
 
 function applyAll(obj) {
   Object.keys(obj).forEach(k => {
     if (['twistMode', 'hand', 'solveMode'].includes(k)) { state[k] = obj[k]; if (inputs[k]) inputs[k].value = obj[k]; }
-    else if (['solveTwist', 'exportInsert'].includes(k)) { state[k] = !!obj[k]; if (inputs[k]) inputs[k].checked = state[k]; }
+    else if (k === 'exportInsert') { state[k] = !!obj[k]; if (inputs[k]) inputs[k].checked = state[k]; }
+    else if (k === 'locks' && obj.locks) {
+      LOCKABLE.forEach(v => {
+        if (v in obj.locks) state.locks[v] = !!obj.locks[v];
+        if (lockBtns[v]) lockBtns[v]();
+      });
+      refreshFreeList();
+    }
     else if (k in DEFAULTS) setParam(k, obj[k]);
   });
   schedule();
@@ -1466,7 +1720,7 @@ document.getElementById('copylink').addEventListener('click', async e => {
 });
 document.getElementById('reset').addEventListener('click', () => {
   history.replaceState(null, '', location.pathname);
-  applyAll(DEFAULTS); refitNext = true;
+  applyAll(Object.assign({}, DEFAULTS, { locks: Object.assign({}, DEFAULTS.locks) })); refitNext = true;
 });
 
 /* ============================================================================
